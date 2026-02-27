@@ -147,9 +147,9 @@ def _decode_phoneme(index: int) -> PhonemeParams:
         (0x04 if (word0 & 0x200) else 0) |
         (0x02 if (word0 & 0x400) else 0) |
         (0x01 if (word0 & 0x800) else 0)
-    )
+    ) ^ 0x7F  # apply the missing ~ from MAME's bitswap(~val, ...)
 
-    pause = not (index == 0x03 or index == 0x3E)
+    pause = (index == 0x03 or index == 0x3E)
 
     return PhonemeParams(
         f1=f1, va=va, f2=f2, fc=fc, f2q=f2q, f3=f3, fa=fa,

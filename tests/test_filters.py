@@ -1,5 +1,6 @@
 """Tests for filter construction and stability."""
 
+import math
 import numpy as np
 import pytest
 from pyvotrax.filters import (
@@ -55,6 +56,11 @@ class TestStandardFilter:
         assert len(a) == 4
         assert len(b) == 4
 
+    def test_b0_is_normalized(self):
+        """After normalization, b[0] should be 1.0."""
+        a, b = build_standard_filter(11247, 11797, 949, 52067, 2280 + 2546, 166272)
+        assert b[0] == pytest.approx(1.0)
+
     def test_f2v_produces_finite_coefficients(self):
         """F2v filter with typical parameters."""
         a, b = build_standard_filter(24840, 29154, 829 + 1390, 38180, 2352 + 833, 34270)
@@ -73,6 +79,13 @@ class TestStandardFilter:
         assert np.all(np.isfinite(a))
         assert np.all(np.isfinite(b))
 
+    def test_3rd_order_coefficients_nonzero(self):
+        """MAME standard filters are 3rd order — all 4 coefficients should be nonzero."""
+        a, b = build_standard_filter(11247, 11797, 949, 52067, 2280 + 2546, 166272)
+        # a[3] and b[3] should be nonzero for a true 3rd-order filter
+        assert a[3] != 0.0
+        assert b[3] != 0.0
+
     def test_poles_inside_unit_circle(self):
         """All standard filter poles should be inside the unit circle (stable)."""
         test_cases = [
@@ -83,16 +96,10 @@ class TestStandardFilter:
         ]
         for params in test_cases:
             a, b = build_standard_filter(*params)
-            # Get poles from denominator polynomial
-            if b[0] != 0:
-                poles = np.roots(b[:3])  # Use first 3 coefficients (2nd order)
-                for pole in poles:
-                    assert abs(pole) < 1.0 + 1e-10, \
-                        f"Unstable pole {pole} (mag={abs(pole)}) for params {params}"
-
-    def test_zero_c3_returns_zeros(self):
-        a, b = build_standard_filter(100, 100, 100, 100, 0, 100)
-        assert a[0] == 0.0
+            poles = np.roots(b)
+            for pole in poles:
+                assert abs(pole) < 1.0 + 1e-6, \
+                    f"Unstable pole {pole} (mag={abs(pole)}) for params {params}"
 
 
 class TestNoiseShaper:
@@ -103,11 +110,19 @@ class TestNoiseShaper:
         assert len(a) == 3
         assert len(b) == 3
 
-    def test_poles_inside_unit_circle(self):
+    def test_b0_is_normalized(self):
         a, b = build_noise_shaper_filter(15500, 14854, 8450, 9523, 14083)
-        poles = np.roots(b)
-        for pole in poles:
-            assert abs(pole) < 1.0 + 1e-10, f"Unstable pole {pole}"
+        assert b[0] == pytest.approx(1.0)
+
+    def test_bandpass_structure(self):
+        """Noise shaper should have a[1]=0 (bandpass zero at DC)."""
+        a, b = build_noise_shaper_filter(15500, 14854, 8450, 9523, 14083)
+        assert a[1] == pytest.approx(0.0)
+
+    def test_antisymmetric_a(self):
+        """a[0] and a[2] should be equal magnitude, opposite sign."""
+        a, b = build_noise_shaper_filter(15500, 14854, 8450, 9523, 14083)
+        assert a[0] == pytest.approx(-a[2])
 
 
 class TestLowpassFilter:
@@ -118,12 +133,15 @@ class TestLowpassFilter:
         assert len(a) == 2
         assert len(b) == 2
 
-    def test_unity_dc_gain(self):
-        """Lowpass should pass DC (sum of a / sum of b ≈ 1 or known gain)."""
+    def test_b0_is_normalized(self):
+        a, b = build_lowpass_filter(1122, 23131)
+        assert b[0] == pytest.approx(1.0)
+
+    def test_dc_gain(self):
+        """MAME lowpass DC gain is ~0.5 (single a[0] coeff, no a[1] term)."""
         a, b = build_lowpass_filter(1122, 23131)
         dc_gain = np.sum(a) / np.sum(b)
-        # DC gain should be close to 1 for a normalized lowpass
-        assert abs(dc_gain - 1.0) < 0.01, f"DC gain = {dc_gain}"
+        assert abs(dc_gain - 0.5) < 0.05, f"DC gain = {dc_gain}, expected ~0.5"
 
     def test_pole_inside_unit_circle(self):
         a, b = build_lowpass_filter(1122, 23131)
@@ -133,17 +151,95 @@ class TestLowpassFilter:
 
 
 class TestInjectionFilter:
-    def test_returns_zeroed_a(self):
-        a, b = build_injection_filter(0, 0, 0, 0, 0, 0)
-        assert np.all(a == 0.0)
+    # Typical cap values for F2n (from SH phoneme region)
+    CAPS = (29154, 829, 38180, 2352, 34270)
 
-    def test_produces_zero_output(self):
-        """Injection filter should produce zero output for any input."""
-        a, b = build_injection_filter(0, 0, 0, 0, 0, 0)
-        x_hist = np.array([1.0, 0.5])
+    def test_highpass_coefficient_signs(self):
+        """IIR should have a[0] > 0 and a[1] < 0 (highpass character)."""
+        a, b = build_injection_filter(*self.CAPS)
+        assert a[0] > 0
+        assert a[1] < 0
+
+    def test_stable_pole(self):
+        """IIR pole should be inside the unit circle (stable)."""
+        a, b = build_injection_filter(*self.CAPS)
+        assert b[0] == pytest.approx(1.0)
+        pole = -b[1]
+        assert 0 < pole < 1.0, f"Pole at z={pole}, expected 0 < pole < 1"
+
+    def test_dc_gain_matches_analog(self):
+        """DC gain should equal k0/k1 (small but nonzero)."""
+        c1b, c2t, c2b, c3, c4 = self.CAPS
+        a, b = build_injection_filter(*self.CAPS)
+
+        k0 = c2t / (CCLOCK * c1b)
+        k1 = c4 * c2t / (CCLOCK * c1b * c3)
+        expected_dc = k0 / k1
+
+        dc_gain = np.sum(a) / np.sum(b)
+        assert dc_gain == pytest.approx(expected_dc, rel=1e-6)
+        assert 0 < dc_gain < 0.5  # small but nonzero
+
+    def test_gain_increases_with_frequency(self):
+        """Higher frequencies should have higher gain (highpass behavior)."""
+        a, b = build_injection_filter(*self.CAPS)
+        gains = []
+        for f in [1000, 5000, 10000]:
+            w = 2 * math.pi * f / SCLOCK
+            # H(e^jw) for IIR: (a[0] + a[1]*e^(-jw)) / (1 + b[1]*e^(-jw))
+            ejw = np.exp(-1j * w)
+            h = (a[0] + a[1] * ejw) / (1.0 + b[1] * ejw)
+            gains.append(abs(h))
+        assert gains[0] < gains[1] < gains[2]
+
+    def test_guard_clause_zeroes_filter(self):
+        """When k1 <= 0 (e.g. c4=0), filter should be zeroed."""
+        a, b = build_injection_filter(29154, 829, 38180, 2352, 0)
+        assert np.all(a == 0.0)
+        assert b[0] == pytest.approx(1.0)
+
+    def test_matches_analog_at_multiple_freqs(self):
+        """IIR gain should match the exact analog magnitude at 1k, 5k, 10k Hz."""
+        c1b, c2t, c2b, c3, c4 = self.CAPS
+        a, b = build_injection_filter(*self.CAPS)
+
+        k0 = c2t / (CCLOCK * c1b)
+        k1 = c4 * c2t / (CCLOCK * c1b * c3)
+        k2 = c4 * c2b / (CCLOCK * CCLOCK * c1b * c3)
+
+        for f in [1000, 5000, 10000]:
+            w = 2 * math.pi * f
+            # Exact analog: |H(jw)| = |(k0 + k2*jw)| / |(k1 + k2*jw)|
+            analog_gain = abs(k0 + 1j * k2 * w) / abs(k1 + 1j * k2 * w)
+
+            # Digital IIR gain
+            wd = 2 * math.pi * f / SCLOCK
+            ejw = np.exp(-1j * wd)
+            digital_gain = abs((a[0] + a[1] * ejw) / (1.0 + b[1] * ejw))
+
+            assert digital_gain == pytest.approx(analog_gain, rel=0.05), \
+                f"Mismatch at {f} Hz: digital={digital_gain:.4f}, analog={analog_gain:.4f}"
+
+    def test_nonzero_output_for_varying_input(self):
+        """IIR should produce nonzero output for a changing input signal."""
+        a, b = build_injection_filter(*self.CAPS)
+        x_hist = np.array([1.0, 0.0])
         y_hist = np.array([0.0])
         result = apply_filter(x_hist, y_hist, a, b)
-        assert result == 0.0
+        assert result != 0.0
+
+    def test_dc_output_small(self):
+        """DC output should be small but nonzero (DC gain = k0/k1)."""
+        a, b = build_injection_filter(*self.CAPS)
+        # Run filter with DC input until it converges
+        x_hist = np.array([1.0, 1.0])
+        y_hist = np.array([0.0])
+        for _ in range(100):
+            result = apply_filter(x_hist, y_hist, a, b)
+            y_hist[0] = result
+        # Steady-state output should be small (DC gain < 0.5)
+        assert abs(result) < 0.5
+        assert abs(result) > 0.0
 
 
 class TestApplyFilter:

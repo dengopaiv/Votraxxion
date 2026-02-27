@@ -11,13 +11,6 @@ MASTER_CLOCK = 720_000
 SCLOCK = MASTER_CLOCK // 18   # 40000 Hz - analog sample rate
 CCLOCK = SCLOCK // 2          # 20000 Hz - chip update rate
 
-# Combined R*C scaling factor.
-# Cap values from MAME die analysis are in abstract units.
-# This factor converts cap_value -> RC time constant (seconds).
-# Chosen so that formant filter center frequencies fall in the speech range
-# (F1: 200-900 Hz, F2: 500-2500 Hz, F3: 1500-3500 Hz, F4: ~2000 Hz).
-_RC_SCALE = 1e-8
-
 
 def bits_to_caps(value: int, caps: tuple) -> float:
     """Convert a multi-bit value to a summed capacitance.
@@ -32,137 +25,119 @@ def bits_to_caps(value: int, caps: tuple) -> float:
     return total
 
 
-def build_standard_filter(c1t: float, c1b: float, c2t: float, c2b: float,
-                          c3: float, c4: float):
-    """Build a 2nd-order bandpass/resonator filter (F1, F2v, F3, F4).
+def build_standard_filter(c1t, c1b, c2t, c2b, c3, c4):
+    """Build a 3rd-order formant filter (F1, F2v, F3, F4).
 
-    Returns (a, b) as numpy arrays of length 4, implementing a biquad via
-    bilinear transform with pre-warping. Based on MAME's active-RC topology.
+    H(s) = (1 + k0*s) / (1 + k1*s + k2*s^2)
+
+    Returns (a, b) as numpy arrays of length 4, matching MAME's
+    bilinear transform with frequency pre-warping (votrax.cpp:849-884).
     """
-    if c3 == 0 or c4 == 0:
-        return np.zeros(4), np.array([1.0, 0.0, 0.0, 0.0])
+    # Coefficients from circuit analysis (cap ratios cancel physical units)
+    k0 = c1t / (CCLOCK * c1b)
+    k1 = c4 * c2t / (CCLOCK * c1b * c3)
+    k2 = c4 * c2b / (CCLOCK * CCLOCK * c1b * c3)
 
-    # Integrator angular frequencies
-    w3 = 1.0 / (_RC_SCALE * c3)
-    w4 = 1.0 / (_RC_SCALE * c4)
+    # Estimate the filter cutoff frequency
+    fpeak = math.sqrt(abs(k0 * k1 - k2)) / (2 * math.pi * k2)
 
-    # Center frequency (Hz)
-    wn = math.sqrt(w3 * w4)
-    fn = wn / (2.0 * math.pi)
+    # Turn that into a warp multiplier
+    zc = 2 * math.pi * fpeak / math.tan(math.pi * fpeak / SCLOCK)
 
-    # Pre-warp for bilinear transform
-    cy = math.tan(math.pi * fn / SCLOCK)
-    cy2 = cy * cy
+    # Z-transform coefficients
+    m0 = zc * k0
+    m1 = zc * k1
+    m2 = zc * zc * k2
 
-    # Damping factor from c2 feedback network
-    # cx = 1/(2*Q), where Q is determined by c2t, c2b relative to c3
-    if (c2t + c2b) > 0 and c3 > 0:
-        cx = c2t * c2b / (2.0 * c3 * (c2t + c2b))
-    else:
-        cx = 0.5
-    cx = max(cx, 0.01)  # Ensure stability
+    a = np.array([1 + m0, 3 + m0, 3 - m0, 1 - m0])
+    b = np.array([1 + m1 + m2, 3 + m1 - m2, 3 - m1 - m2, 1 - m1 + m2])
 
-    # Input gain from capacitive divider
-    if c1t + c1b > 0:
-        gain = c1b / (c1t + c1b)
-    elif c1b > 0:
-        gain = 1.0
-    else:
-        gain = 0.0
-
-    # Bilinear transform of 2nd-order bandpass:
-    # H(s) = gain * wn * s / (s^2 + 2*cx*wn*s + wn^2)
-    denom = 1.0 + 2.0 * cx * cy + cy2
-
-    a = np.zeros(4)
-    b = np.zeros(4)
-
-    a[0] = gain * cy / denom
-    a[1] = 0.0
-    a[2] = -gain * cy / denom
-    a[3] = 0.0
-
-    b[0] = 1.0
-    b[1] = 2.0 * (cy2 - 1.0) / denom
-    b[2] = (1.0 - 2.0 * cx * cy + cy2) / denom
-    b[3] = 0.0
-
+    # Normalize so b[0]=1 (apply_filter assumes this)
+    a /= b[0]
+    b /= b[0]
     return a, b
 
 
-def build_noise_shaper_filter(c1: float, c2t: float, c2b: float,
-                              c3: float, c4: float):
+def build_noise_shaper_filter(c1, c2t, c2b, c3, c4):
     """Build the noise shaper filter (2nd-order bandpass).
 
-    Returns (a, b) numpy arrays of length 3.
+    H(s) = k0*s / (1 + k1*s + k2*s^2)
+
+    Returns (a, b) numpy arrays of length 3, matching MAME's
+    bilinear transform (votrax.cpp:957-986).
     """
-    if c1 == 0 or c3 == 0 or c4 == 0:
-        return np.zeros(3), np.array([1.0, 0.0, 0.0])
+    # Coefficients from circuit analysis
+    k0 = c2t * c3 * c2b / c4
+    k1 = c2t * (CCLOCK * c2b)
+    k2 = c1 * c2t * c3 / (CCLOCK * c4)
 
-    w3 = 1.0 / (_RC_SCALE * c3)
-    w4 = 1.0 / (_RC_SCALE * c4)
+    # Estimate the filter cutoff frequency
+    fpeak = math.sqrt(1 / k2) / (2 * math.pi)
 
-    wn = math.sqrt(w3 * w4)
-    fn = wn / (2.0 * math.pi)
+    # Turn that into a warp multiplier
+    zc = 2 * math.pi * fpeak / math.tan(math.pi * fpeak / SCLOCK)
 
-    cy = math.tan(math.pi * fn / SCLOCK)
-    cy2 = cy * cy
+    # Z-transform coefficients
+    m0 = zc * k0
+    m1 = zc * k1
+    m2 = zc * zc * k2
 
-    if (c2t + c2b) > 0 and c3 > 0:
-        cx = c2t * c2b / (2.0 * c3 * (c2t + c2b))
-    else:
-        cx = 0.5
-    cx = max(cx, 0.01)
+    a = np.array([m0, 0.0, -m0])
+    b = np.array([1 + m1 + m2, 2 - 2 * m2, 1 - m1 + m2])
 
-    gain = c3 / c1 if c1 > 0 else 1.0
-
-    denom = 1.0 + 2.0 * cx * cy + cy2
-
-    a = np.zeros(3)
-    b = np.zeros(3)
-
-    a[0] = gain * cy / denom
-    a[1] = 0.0
-    a[2] = -gain * cy / denom
-
-    b[0] = 1.0
-    b[1] = 2.0 * (cy2 - 1.0) / denom
-    b[2] = (1.0 - 2.0 * cx * cy + cy2) / denom
-
+    # Normalize so b[0]=1
+    a /= b[0]
+    b /= b[0]
     return a, b
 
 
-def build_lowpass_filter(c1t: float, c1b: float):
+def build_lowpass_filter(c1t, c1b):
     """Build the final output lowpass filter (FX).
 
-    Returns (a, b) numpy arrays of length 2.
+    MAME: "The caps values puts the cutoff at around 150Hz,
+    but that's no good. Recordings shows we want it around 4K, so fuzz it."
+
+    Returns (a, b) numpy arrays of length 2, matching MAME's
+    bilinear transform (votrax.cpp:904-926).
     """
-    if c1t + c1b == 0:
-        return np.zeros(2), np.array([1.0, 0.0])
+    # Compute the coefficient with MAME's 150/4000 fudge factor
+    k = c1b / (CCLOCK * c1t) * (150.0 / 4000.0)
 
-    # Cutoff frequency
-    w = 1.0 / (_RC_SCALE * (c1t + c1b))
-    freq = w / (2.0 * math.pi)
+    # Compute the filter cutoff frequency
+    fpeak = 1 / (2 * math.pi * k)
 
-    cy = math.tan(math.pi * freq / SCLOCK)
-    denom = 1.0 + cy
+    # Turn that into a warp multiplier
+    zc = 2 * math.pi * fpeak / math.tan(math.pi * fpeak / SCLOCK)
 
-    # Bilinear 1st-order lowpass: H(z) = K*(1+z^-1)/(1+p*z^-1)
-    a = np.array([cy / denom, cy / denom])
-    b = np.array([1.0, (cy - 1.0) / denom])
+    # Z-transform coefficient
+    m = zc * k
 
+    # MAME: a[0]=1, b[0]=1+m, b[1]=1-m  (1st order, single a coeff)
+    a = np.array([1.0 / (1 + m), 0.0])
+    b = np.array([1.0, (1 - m) / (1 + m)])
     return a, b
 
 
-def build_injection_filter(c1t: float, c1b: float, c2t: float, c2b: float,
-                           c3: float, c4: float):
-    """Build the noise injection filter (F2n).
+def build_injection_filter(c1b, c2t, c2b, c3, c4):
+    """Build the noise injection filter (F2n) via pole-reflected bilinear transform.
 
-    MAME neutralizes this filter (all coefficients zeroed).
-    Returns zeroed (a, b) arrays of length 2.
+    The analog circuit: H(s) = (k0 + k2*s) / (k1 - k2*s) has a RHP pole (unstable).
+    Reflecting the pole: H_stable(s) = (k0 + k2*s) / (k1 + k2*s) preserves the
+    magnitude response while placing the pole in the LHP (stable). Bilinear transform
+    then yields a first-order IIR with the pole guaranteed inside the unit circle.
     """
-    a = np.zeros(2)
-    b = np.array([1.0, 0.0])
+    k0 = c2t / (CCLOCK * c1b)
+    k1 = c4 * c2t / (CCLOCK * c1b * c3)
+    k2 = c4 * c2b / (CCLOCK * CCLOCK * c1b * c3)
+
+    if k1 <= 0:
+        return np.zeros(2), np.array([1.0, 0.0])
+
+    c = 2.0 * SCLOCK  # bilinear transform constant
+    denom = k1 + k2 * c
+
+    a = np.array([(k0 + k2 * c) / denom, (k0 - k2 * c) / denom])
+    b = np.array([1.0, (k1 - k2 * c) / denom])
     return a, b
 
 

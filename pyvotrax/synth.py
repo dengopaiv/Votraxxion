@@ -12,8 +12,8 @@ from .filters import SCLOCK
 class VotraxSynthesizer:
     """High-level interface for synthesizing speech from phoneme sequences."""
 
-    def __init__(self):
-        self._chip = VotraxSC01A()
+    def __init__(self, enhanced: bool = False):
+        self._chip = VotraxSC01A(enhanced=enhanced)
 
     def synthesize(self, phonemes: list) -> np.ndarray:
         """Synthesize audio from a list of (phoneme_code, inflection) tuples.
@@ -30,13 +30,23 @@ class VotraxSynthesizer:
 
         for phone, inflection in phonemes:
             self._chip.phone_commit(phone, inflection)
-            n_samples = self._chip.get_phone_duration_samples()
-            if n_samples > 0:
-                segment = self._chip.generate_samples(n_samples)
-                segments.append(segment)
+            samples = []
+            while not self._chip.phone_done:
+                samples.append(self._chip.generate_one_sample())
+            if samples:
+                segments.append(np.array(samples))
 
         if not segments:
             return np.array([], dtype=np.float64)
+
+        # After all phonemes finish, the chip's filters still contain energy
+        # that needs to decay naturally (just like real hardware runs continuously).
+        # Generate 200ms of tail to capture this decay.
+        tail_len = int(0.2 * SCLOCK)
+        tail = np.empty(tail_len)
+        for i in range(tail_len):
+            tail[i] = self._chip.generate_one_sample()
+        segments.append(tail)
 
         return np.concatenate(segments)
 
@@ -75,9 +85,12 @@ class VotraxSynthesizer:
 
         resampled = resample_poly(audio, up, down)
 
-        # Normalize to int16 range
-        peak = np.max(np.abs(resampled))
-        if peak > 0:
-            resampled = resampled / peak * 32767.0
+        # RMS-based normalization: keeps voice and noise at natural relative levels
+        # Peak normalization crushed vowels when noise spikes dominated
+        rms = np.sqrt(np.mean(resampled ** 2))
+        if rms > 0:
+            target_rms = 32767 * 0.25  # -12dB below full scale
+            resampled = resampled * (target_rms / rms)
+            resampled = np.clip(resampled, -32767, 32767)
 
         wavfile.write(filename, target_rate, resampled.astype(np.int16))

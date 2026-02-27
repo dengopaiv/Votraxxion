@@ -37,29 +37,21 @@ class TestROMData:
 
     def test_pause_phonemes(self):
         # PA0 (0x03) and PA1 (0x3E) are pause phonemes
-        assert ROM_DATA[0x03].pause is False
-        assert ROM_DATA[0x3E].pause is False
+        assert ROM_DATA[0x03].pause is True
+        assert ROM_DATA[0x3E].pause is True
 
     def test_non_pause_phonemes(self):
         # Most phonemes are not pauses
-        assert ROM_DATA[0x00].pause is True  # EH3
-        assert ROM_DATA[0x24].pause is True  # AH
-        assert ROM_DATA[0x3F].pause is True  # STOP
+        assert ROM_DATA[0x00].pause is False  # EH3
+        assert ROM_DATA[0x24].pause is False  # AH
+        assert ROM_DATA[0x3F].pause is False  # STOP
 
     def test_spot_check_eh3(self):
         """Spot check EH3 (code 0) against manually decoded values."""
         p = ROM_DATA[0]
-        # word0=0x361 = 0b001101100001
-        # Duration from word0 bits 5-11:
-        #   bit5  (0x020): 0x361 & 0x020 = 0x020 -> 0x40
-        #   bit6  (0x040): 0x361 & 0x040 = 0x040 -> 0x20
-        #   bit7  (0x080): 0x361 & 0x080 = 0     -> 0
-        #   bit8  (0x100): 0x361 & 0x100 = 0x100 -> 0x08
-        #   bit9  (0x200): 0x361 & 0x200 = 0x200 -> 0x04
-        #   bit10 (0x400): 0x361 & 0x400 = 0     -> 0
-        #   bit11 (0x800): 0x361 & 0x800 = 0     -> 0
-        # duration = 0x40 + 0x20 + 0x08 + 0x04 = 0x6C = 108
-        assert p.duration == 108
+        # word0=0x361, raw bitswap duration = 0x6C = 108
+        # After MAME's ~val inversion: 108 ^ 0x7F = 19
+        assert p.duration == 19
         # closure: bit4 of word0: 0x361 & 0x10 = 0 -> 0
         assert p.closure == 0
 

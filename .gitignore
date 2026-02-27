@@ -5,3 +5,21 @@ pyvotrax.egg-info/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Build artifacts
+build/
+*.pyd
+
+# Temp / generated files
+*.wav
+=1.0
+
+# Local tooling
+.claude/
+
+# MAME reference (not our code)
+mame_votrax.cpp
+
+# NVDA addon build outputs & vendored deps
+*.nvda-addon
+nvda-addon/lib/

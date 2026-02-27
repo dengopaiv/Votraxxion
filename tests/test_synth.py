@@ -58,6 +58,19 @@ class TestSynthesize:
         audio = synth.synthesize([])
         assert len(audio) == 0
 
+    def test_tail_extends_output(self):
+        """Output should include ~200ms tail beyond the phoneme timing window."""
+        from pyvotrax.filters import SCLOCK
+        synth = VotraxSynthesizer()
+
+        # Synthesize a single vowel followed by STOP
+        audio = synth.synthesize_by_name(["AH", "STOP"])
+        # The tail adds 0.2 * SCLOCK = 8000 samples
+        tail_len = int(0.2 * SCLOCK)
+        assert len(audio) >= tail_len, (
+            f"Output length {len(audio)} is shorter than tail alone ({tail_len})"
+        )
+
 
 class TestToWav:
     def test_write_wav_file(self):
