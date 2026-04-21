@@ -1,0 +1,2 @@
+The goal of this project, is to build as close an approximation of the votrax speech synthesizer used in 70s and 80. In Braille and speak or such products. It is not a Klatt synthesizer, hence it shouldn't be built like one. Initially we need to make sure the synthesis and the standalone program to produce wav samples works and the synthesis is in tact. Then we can work on turning it into an nvda addon once that is complete.
+

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "Default",
+  "description": "Stock SC-01A settings at nominal 720 kHz master clock. MAME-accurate output.",
+  "mode": "text",
+  "input": "Hello world.",
+  "synth": {
+    "master_clock": 720000.0,
+    "fx_fudge": 0.0375,
+    "dc_block": true,
+    "radiation_filter": false
+  },
+  "tts": {
+    "enhanced": false
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "As-schematic (muffled)",
+  "description": "fx_fudge=1.0 uses the FX lowpass cutoff that the on-die capacitor values predict (~150 Hz) instead of MAME's observed ~4 kHz. Heavily muffled.",
+  "mode": "phoneme_string",
+  "input": "I3 M P O1:2 R:1 T AH N T STOP",
+  "synth": {
+    "master_clock": 720000.0,
+    "fx_fudge": 1.0,
+    "dc_block": false,
+    "radiation_filter": false
+  },
+  "tts": {
+    "enhanced": false
+  }
+}

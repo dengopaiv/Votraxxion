@@ -46,9 +46,11 @@ class TestArpabetMapping:
         assert len(ARPABET_TO_VOTRAX) == 39
 
     @pytest.mark.parametrize("arpa,votrax_names", [
-        ("AA", ["A"]),
+        # AA (/ɑ/ "father") → Votrax AH (/ɑ/ "mop"); NOT Votrax A which is /eɪ/ "day".
+        # AH (/ʌ/ "cup")    → Votrax UH (/ʌ/ "cup").
+        ("AA", ["AH"]),
         ("AE", ["AE"]),
-        ("AH", ["AH"]),
+        ("AH", ["UH"]),
         ("AO", ["AW"]),
         ("AW", ["AW1"]),
         ("AY", ["AY"]),
@@ -129,13 +131,16 @@ class TestArpabetToVotrax:
     """Test the arpabet_to_votrax conversion function."""
 
     def test_simple_vowel(self):
+        # ARPAbet AH maps to Votrax UH (/ʌ/ "cup"); with no context and no next
+        # phoneme, the variant selector picks the longest variant in the UH
+        # group (["UH3", "UH2", "UH1", "UH"]) → "UH".
         result = arpabet_to_votrax(["AH0"])
         assert len(result) == 1
-        assert result[0] == (name_to_code("AH"), 0)
+        assert result[0] == (name_to_code("UH"), 0)
 
     def test_stressed_vowel(self):
         result = arpabet_to_votrax(["AH1"])
-        assert result[0] == (name_to_code("AH"), 2)
+        assert result[0] == (name_to_code("UH"), 2)
 
     def test_consonant(self):
         result = arpabet_to_votrax(["B"])
@@ -365,8 +370,9 @@ class TestCoarticulationIntegration:
 
     def test_single_unstressed_vowel_before_pause(self):
         """Single unstressed vowel defaults to longest (before pause)."""
+        # AH (/ʌ/) → Votrax UH; longest UH variant is "UH".
         result = arpabet_to_votrax(["AH0"])
-        assert result[0] == (name_to_code("AH"), 0)
+        assert result[0] == (name_to_code("UH"), 0)
 
     def test_unstressed_vowel_in_context(self):
         """Unstressed vowel between consonants → shortest variant."""
@@ -397,9 +403,9 @@ class TestCoarticulationIntegration:
     def test_last_word_vowel_before_pause(self):
         """Last vowel in last word gets longest variant (before sentence pause)."""
         result = arpabet_to_votrax(["M", "AH1"], is_last_word=True)
-        # AH1: is_word_final=True, is_last_word=True → next_for_variant=None → longest
-        ah_code = result[1][0]
-        assert ah_code == name_to_code("AH")
+        # AH1 → Votrax UH; is_word_final=True, is_last_word=True → next=None → longest UH.
+        uh_code = result[1][0]
+        assert uh_code == name_to_code("UH")
 
     def test_ih_unstressed_between_consonants(self):
         """IH0 between non-tight consonants → shortest (stress-based)."""
@@ -411,6 +417,28 @@ class TestCoarticulationIntegration:
         """Consonants are not affected by variant selection."""
         result = arpabet_to_votrax(["T"])
         assert result[0] == (name_to_code("T"), 0)
+
+    def test_electronic_uses_ah_not_a_for_tron(self):
+        """Regression: ARPAbet AA1 in 'electronic' (CMU: IH2 L EH2 K T R AA1 N IH0 K)
+        must map to Votrax AH (/ɑ/ "mop"), not Votrax A (/eɪ/ "day"). Earlier
+        versions produced 'electraynic'. User-reported regression."""
+        from pyvotrax.tts import VotraxTTS
+        from pyvotrax.phonemes import code_to_name
+
+        tts = VotraxTTS()
+        phonemes = tts.text_to_phonemes("electronic")
+        names = [code_to_name(c) for c, _ in phonemes]
+        # The /ɑ/ of "tron" should be an AH-family phoneme, not A-family.
+        ah_family = {"AH", "AH1", "AH2"}
+        a_family = {"A", "A1", "A2"}
+        ah_count = sum(1 for n in names if n in ah_family)
+        a_count = sum(1 for n in names if n in a_family)
+        assert ah_count >= 1, (
+            f"Expected at least one AH-family phoneme for /ɑ/ in 'electronic'; got {names}"
+        )
+        assert a_count == 0, (
+            f"No A-family (/eɪ/) phonemes should appear in 'electronic'; got {names}"
+        )
 
     def test_diphthong_oy_variant_applied(self):
         """OY diphthong: first element (O1) is not a variant base, passes through."""

@@ -4,6 +4,7 @@ Converts English text to Votrax SC-01A phoneme sequences via ARPAbet mapping,
 then synthesizes audio using the chip emulator.
 """
 
+import math
 import re
 
 import numpy as np
@@ -20,6 +21,15 @@ def _get_cmu_dict():
         _CMU_DICT = cmudict.dict()
     return _CMU_DICT
 from .synth import VotraxSynthesizer
+
+# ARPAbet vowels (for detecting voiced/voiceless context)
+_ARPABET_VOWELS = {
+    "AA", "AE", "AH", "AO", "AW", "AY", "EH", "ER", "EY",
+    "IH", "IY", "OW", "OY", "UH", "UW",
+}
+
+# Voiceless consonants in ARPAbet (for Klatt rule 6)
+_VOICELESS = {"P", "T", "K", "F", "TH", "S", "SH", "CH", "HH"}
 
 # Vowel variant groups: shortest → longest duration.
 # Numbered variants share identical formant targets but differ in closure delay,
@@ -99,9 +109,15 @@ def _select_variant(
 # Stress digits (0/1/2) are stripped from vowels before lookup.
 # Some ARPAbet phonemes map to multiple Votrax phonemes (e.g., OY → O1 + Y).
 ARPABET_TO_VOTRAX = {
-    "AA": ["A"],
+    # Vowel mapping note: ARPAbet AA (/ɑ/ as in "father", "tron") and AH
+    # (/ʌ/ as in "cup") correspond to Votrax AH and UH respectively per the
+    # SC-01A datasheet phoneme chart (AH="mop", UH="cup"). The Votrax "A"
+    # phoneme is /eɪ/ ("day") and must not be used for ARPAbet AA — earlier
+    # versions had AA→A and AH→AH, which mispronounced "electronic" as
+    # "electraynic" and "cup"-style vowels as "mop".
+    "AA": ["AH"],
     "AE": ["AE"],
-    "AH": ["AH"],
+    "AH": ["UH"],
     "AO": ["AW"],
     "AW": ["AW1"],
     "AY": ["AY"],
@@ -289,11 +305,250 @@ def _detect_sentence_type(text: str) -> str:
     return "statement"
 
 
-class VotraxTTS:
-    """Text-to-speech engine using CMU dict and the Votrax SC-01A emulator."""
+def _apply_klatt_duration(
+    phonemes_with_info: list[dict],
+) -> list[dict]:
+    """Apply Klatt's multiplicative duration rules to phoneme sequence.
 
-    def __init__(self, enhanced: bool = False):
-        self._synth = VotraxSynthesizer(enhanced=enhanced)
+    Each entry in phonemes_with_info is a dict with keys:
+        'base_votrax': str, 'stress': int, 'arpabet_base': str,
+        'votrax_names': list[str], 'is_word_final': bool,
+        'is_last_word': bool, 'word_syllable_count': int,
+        'prev_arpabet': str|None, 'next_arpabet': str|None
+
+    Modifies each entry to add 'duration_mult' (float).
+    """
+    n = len(phonemes_with_info)
+    for i, info in enumerate(phonemes_with_info):
+        mult = 1.0
+        stress = info['stress']
+        base = info['arpabet_base']
+        is_vowel = base in _ARPABET_VOWELS
+
+        # Rule 1: Pre-pausal (before pause or end)
+        if info['is_word_final'] and info['is_last_word']:
+            mult *= 1.4
+
+        # Rule 4/5: Stress
+        if stress == 1:
+            mult *= 1.3
+        elif stress == 0 and is_vowel:
+            mult *= 0.75
+
+        # Rule 6: Vowel before voiceless consonant
+        if is_vowel and info['next_arpabet'] in _VOICELESS:
+            mult *= 0.75
+
+        # Rule 8: Polysyllabic shortening
+        if is_vowel and info.get('word_syllable_count', 1) >= 3:
+            mult *= 0.85
+
+        # Rule 3: Non-phrase-final shortening
+        if not (info['is_word_final'] and info['is_last_word']):
+            mult *= 0.85
+
+        # Rule 9: Non-initial consonant
+        if not is_vowel and i > 0 and not info.get('is_word_initial', True):
+            mult *= 0.85
+
+        info['duration_mult'] = mult
+
+    return phonemes_with_info
+
+
+def _select_variant_by_duration(base_votrax: str, duration_mult: float) -> str:
+    """Select vowel variant whose relative duration best matches the target.
+
+    Duration multiplier maps to variant index:
+    <0.8 → shortest, 0.8-1.0 → short-mid, 1.0-1.2 → mid-long, >1.2 → longest
+    """
+    variants = _VOWEL_VARIANTS.get(base_votrax)
+    if variants is None:
+        return base_votrax
+
+    n = len(variants)
+    if duration_mult < 0.8:
+        idx = 0
+    elif duration_mult < 1.0:
+        idx = min(1, n - 1)
+    elif duration_mult < 1.2:
+        idx = min(n - 2, n - 1)
+    else:
+        idx = n - 1
+    return variants[idx]
+
+
+def _apply_declination(result: list[tuple[int, int]], pa0_code: int, stop_code: int):
+    """Apply F0 declination: position-dependent inflection offset.
+
+    First third trends higher (+1), last third trends lower (-1), clamped 0-3.
+    """
+    # Count non-pause phonemes
+    non_pause = [(i, c, inf) for i, (c, inf) in enumerate(result)
+                 if c != pa0_code and c != stop_code]
+    if len(non_pause) < 3:
+        return
+
+    n = len(non_pause)
+    first_third = n // 3
+    last_third_start = n - (n // 3)
+
+    for pos, (idx, code, inf) in enumerate(non_pause):
+        if pos < first_third:
+            new_inf = min(inf + 1, 3)
+        elif pos >= last_third_start:
+            new_inf = max(inf - 1, 0)
+        else:
+            new_inf = inf
+        result[idx] = (code, new_inf)
+
+
+def _apply_question_intonation(result: list[tuple[int, int]],
+                                pa0_code: int, stop_code: int,
+                                last_word_start: int):
+    """Apply gradual rising intonation over the final word for questions.
+
+    Instead of abruptly setting the last 3 phonemes to inflection 3,
+    ramp inflection up progressively across the final word's phonemes.
+    """
+    # Find phonemes belonging to the last word (from last_word_start to end)
+    word_phones = []
+    for j in range(last_word_start, len(result)):
+        code, inf = result[j]
+        if code != pa0_code and code != stop_code:
+            word_phones.append(j)
+
+    if not word_phones:
+        return
+
+    n = len(word_phones)
+    for k, idx in enumerate(word_phones):
+        # Progressive ramp: 0 → 1 → 2 → 3 across the word
+        target_inf = min(3, 1 + (k * 3) // max(n, 1))
+        code, _ = result[idx]
+        result[idx] = (code, target_inf)
+
+
+def _fujisaki_contour(result: list[tuple[int, int]],
+                       pa0_code: int, stop_code: int,
+                       stressed_positions: list[int]):
+    """Apply Fujisaki phrase+accent F0 model.
+
+    ln(F0(t)) = ln(Fb) + Σ Ap*Gp(t) + Σ Aa*Ga(t)
+    Maps continuous F0 to SC-01A's 4 inflection levels.
+
+    Args:
+        result: List of (code, inflection) tuples to modify in-place.
+        pa0_code: Pause phoneme code.
+        stop_code: Stop phoneme code.
+        stressed_positions: Indices into result where primary stress occurs.
+    """
+    non_pause = [(i, c) for i, (c, _) in enumerate(result)
+                 if c != pa0_code and c != stop_code]
+    if len(non_pause) < 3:
+        return
+
+    n = len(non_pause)
+
+    # Fujisaki parameters
+    alpha = 2.0    # phrase time constant (rad/s)
+    Ap = 0.4       # phrase command magnitude
+    beta = 20.0    # accent time constant (rad/s)
+    Aa = 0.3       # accent command magnitude
+
+    # Time in arbitrary units (each phoneme ~ 1 unit)
+    f0_contour = []
+    for pos in range(n):
+        t = float(pos)
+
+        # Phrase component: Gp(t) = alpha^2 * t * exp(-alpha*t)
+        # Phrase onset at t=0
+        gp = (alpha ** 2) * t * math.exp(-alpha * t) if t > 0 else 0.0
+        phrase = Ap * gp
+
+        # Accent components: one per stressed position
+        accent = 0.0
+        for sp in stressed_positions:
+            # Find the position index of this stressed phoneme
+            sp_pos = None
+            for k, (idx, _) in enumerate(non_pause):
+                if idx == sp:
+                    sp_pos = k
+                    break
+            if sp_pos is None:
+                continue
+
+            # Step response of 2nd-order: Ga(t) = 1 - (1 + beta*dt)*exp(-beta*dt)
+            dt = t - sp_pos
+            if dt >= 0:
+                ga = 1.0 - (1.0 + beta * dt) * math.exp(-beta * dt)
+            else:
+                ga = 0.0
+            # Accent active for ~2 phoneme units
+            if dt > 2.0:
+                # Accent offset
+                dt_off = dt - 2.0
+                ga -= 1.0 - (1.0 + beta * dt_off) * math.exp(-beta * dt_off)
+            accent += Aa * ga
+
+        f0_val = phrase + accent
+        f0_contour.append(f0_val)
+
+    if not f0_contour:
+        return
+
+    # Map continuous F0 contour to 0-3 inflection levels
+    min_f0 = min(f0_contour)
+    max_f0 = max(f0_contour)
+    f0_range = max_f0 - min_f0
+
+    for pos, (idx, code) in enumerate(non_pause):
+        if f0_range > 0:
+            normalized = (f0_contour[pos] - min_f0) / f0_range
+        else:
+            normalized = 0.5
+        inf = min(3, int(normalized * 4))
+        result[idx] = (code, inf)
+
+
+class VotraxTTS:
+    """Text-to-speech engine using CMU dict and the Votrax SC-01A emulator.
+
+    Args:
+        enhanced: Enable enhanced prosody (Klatt duration rules, vowel variant
+                  selection, F0 declination, Fujisaki model). Default False.
+        dc_block: Forwarded to :class:`VotraxSynthesizer`. Applies a 20 Hz DC
+                  blocker to the output. The SC-01A AO pin is DC-biased per the
+                  1980 datasheet, so enabling this is recommended for file
+                  export. Default False to preserve historical output.
+        radiation_filter: Forwarded to :class:`VotraxSynthesizer`. Applies a
+                  first-difference +6 dB/oct radiation filter. Default False.
+        master_clock: Forwarded to :class:`VotraxSynthesizer`. Default 720 000.
+        fx_fudge: Forwarded to :class:`VotraxSynthesizer`. Default 150/4000
+                  (authentic).
+    """
+
+    def __init__(
+        self,
+        enhanced: bool = False,
+        dc_block: bool = True,
+        radiation_filter: bool = False,
+        master_clock: float = 720_000.0,
+        fx_fudge: float = 150.0 / 4000.0,
+        closure_strength: float = 1.0,
+        enhanced_dsp: bool = False,
+        rd: float = 1.0,
+    ):
+        self._enhanced = enhanced
+        self._synth = VotraxSynthesizer(
+            dc_block=dc_block,
+            radiation_filter=radiation_filter,
+            master_clock=master_clock,
+            fx_fudge=fx_fudge,
+            closure_strength=closure_strength,
+            enhanced_dsp=enhanced_dsp,
+            rd=rd,
+        )
 
     def text_to_phonemes(self, text: str) -> list[tuple[int, int]]:
         """Convert text to a list of (votrax_code, inflection) tuples.
@@ -303,9 +558,14 @@ class VotraxTTS:
         PA0 pauses are inserted between words, and STOP at the end.
 
         Sentence-level prosody:
-        - Questions get rising inflection (level 3) on final stressed syllable
-        - Statements get falling inflection (level 0) on final phonemes
+        - Questions get rising inflection on final word (gradual in enhanced)
+        - Statements get falling inflection on final phonemes
         - Pre-pausal lengthening: extra PA0 before final pause
+
+        Enhanced mode additionally applies:
+        - F0 declination across the sentence
+        - Klatt duration rules (variant selection by computed duration)
+        - Fujisaki phrase/accent F0 model
         """
         words = _tokenize(text)
         if not words:
@@ -316,32 +576,106 @@ class VotraxTTS:
         result = []
         pa0_code = name_to_code("PA0")
         stop_code = name_to_code("STOP")
+        last_word_start = 0
+        stressed_positions = []
 
-        for i, word in enumerate(words):
-            is_last = (i == len(words) - 1)
-            arpabet = _word_to_arpabet(word)
-            if arpabet is not None:
-                result.extend(arpabet_to_votrax(arpabet, is_last_word=is_last))
-            else:
-                result.extend(_spell_word(word))
+        if self._enhanced:
+            # Enhanced path: gather phoneme info for Klatt duration + Fujisaki
+            for i, word in enumerate(words):
+                is_last = (i == len(words) - 1)
+                last_word_start = len(result)
+                arpabet = _word_to_arpabet(word)
+                if arpabet is not None:
+                    parsed = [_strip_stress(phone) for phone in arpabet]
 
-            # Insert pause between words
-            if i < len(words) - 1:
-                result.append((pa0_code, 0))
+                    # Count syllables in this word
+                    syllable_count = sum(1 for base, stress in parsed
+                                         if base in _ARPABET_VOWELS)
 
-        # Apply sentence-final contour
-        if result and sentence_type == "question":
-            # Rising inflection: set the last few phonemes to inflection 3
-            for j in range(len(result) - 1, max(len(result) - 4, -1), -1):
-                code, inf = result[j]
-                if code != pa0_code and code != stop_code:
-                    result[j] = (code, 3)
-        elif result and sentence_type == "statement":
-            # Falling inflection: set the last few phonemes to inflection 0
-            for j in range(len(result) - 1, max(len(result) - 3, -1), -1):
-                code, inf = result[j]
-                if code != pa0_code and code != stop_code:
-                    result[j] = (code, 0)
+                    for j, (base, stress) in enumerate(parsed):
+                        inflection = _stress_to_inflection(stress)
+                        votrax_names = ARPABET_TO_VOTRAX.get(base)
+                        if votrax_names is None:
+                            continue
+
+                        prev_base = parsed[j - 1][0] if j > 0 else None
+                        next_base = parsed[j + 1][0] if j < len(parsed) - 1 else None
+                        is_word_final = (j == len(parsed) - 1)
+                        next_for_variant = None if (is_word_final and is_last) else next_base
+
+                        # Build info dict for Klatt
+                        info = {
+                            'base_votrax': votrax_names[0],
+                            'stress': stress,
+                            'arpabet_base': base,
+                            'votrax_names': votrax_names,
+                            'is_word_final': is_word_final,
+                            'is_last_word': is_last,
+                            'word_syllable_count': syllable_count,
+                            'prev_arpabet': prev_base,
+                            'next_arpabet': next_base,
+                            'is_word_initial': (j == 0),
+                        }
+                        _apply_klatt_duration([info])
+
+                        for vname in votrax_names:
+                            if vname == votrax_names[0]:
+                                # Use duration-based variant selection
+                                vname = _select_variant_by_duration(
+                                    vname, info['duration_mult'])
+                            code = name_to_code(vname)
+                            if stress == 1:
+                                stressed_positions.append(len(result))
+                            result.append((code, inflection))
+                else:
+                    result.extend(_spell_word(word))
+
+                if i < len(words) - 1:
+                    result.append((pa0_code, 0))
+
+            # Apply Fujisaki F0 model
+            if stressed_positions:
+                _fujisaki_contour(result, pa0_code, stop_code,
+                                  stressed_positions)
+
+            # Apply declination on top
+            _apply_declination(result, pa0_code, stop_code)
+
+            # Sentence-final contour
+            if result and sentence_type == "question":
+                _apply_question_intonation(result, pa0_code, stop_code,
+                                            last_word_start)
+            elif result and sentence_type == "statement":
+                for j in range(len(result) - 1, max(len(result) - 3, -1), -1):
+                    code, inf = result[j]
+                    if code != pa0_code and code != stop_code:
+                        result[j] = (code, 0)
+
+        else:
+            # Standard path (unchanged)
+            for i, word in enumerate(words):
+                is_last = (i == len(words) - 1)
+                last_word_start = len(result)
+                arpabet = _word_to_arpabet(word)
+                if arpabet is not None:
+                    result.extend(arpabet_to_votrax(arpabet, is_last_word=is_last))
+                else:
+                    result.extend(_spell_word(word))
+
+                if i < len(words) - 1:
+                    result.append((pa0_code, 0))
+
+            # Apply sentence-final contour
+            if result and sentence_type == "question":
+                for j in range(len(result) - 1, max(len(result) - 4, -1), -1):
+                    code, inf = result[j]
+                    if code != pa0_code and code != stop_code:
+                        result[j] = (code, 3)
+            elif result and sentence_type == "statement":
+                for j in range(len(result) - 1, max(len(result) - 3, -1), -1):
+                    code, inf = result[j]
+                    if code != pa0_code and code != stop_code:
+                        result[j] = (code, 0)
 
         # Pre-pausal lengthening: add extra PA0 before STOP
         result.append((pa0_code, 0))
@@ -364,4 +698,4 @@ class VotraxTTS:
             sample_rate: Target sample rate (default 44100 Hz).
         """
         audio = self.speak(text)
-        VotraxSynthesizer.to_wav(audio, filename, target_rate=sample_rate)
+        self._synth.write_wav(audio, filename, target_rate=sample_rate)

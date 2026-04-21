@@ -1,87 +1,9 @@
-"""Tests for the VotraxSC01A chip emulator."""
+"""Tests for the VotraxSC01A chip emulator (black-box, C++ backend)."""
 
 import numpy as np
 import pytest
 from pyvotrax.chip import VotraxSC01A
-from pyvotrax.filters import SCLOCK
-from pyvotrax.rom import ROM_DATA
-
-
-class TestInterpolation:
-    def test_interpolation_converges(self):
-        """Interpolation registers should converge toward target via formant interpolation."""
-        chip = VotraxSC01A(use_native=False)
-        chip.phone_commit(0x24, 0)  # AH
-
-        target = ROM_DATA[0x24].f1
-        # Run many interpolation steps
-        for _ in range(200):
-            chip._interpolate_formants()
-
-        # cur_f1 >> 4 should be close to target
-        converged = chip._cur_f1 >> 4
-        assert converged == target or abs(converged - target) <= 1, \
-            f"Expected ~{target}, got {converged} (cur_f1={chip._cur_f1})"
-
-    def test_interpolation_formula(self):
-        """Test the interpolation formula directly."""
-        # reg = (reg - (reg >> 3) + (target << 1)) & 0xFF
-        reg = 0
-        target = 10
-        for _ in range(100):
-            reg = (reg - (reg >> 3) + (target << 1)) & 0xFF
-
-        # Should converge to target * 16 / 7 ≈ target * 2.28
-        # Actually reg converges to target << 1 * 8/7 ≈ target * 2.28 * 8 ≈ 18.3
-        # In practice, reg >> 4 should be close to target
-        assert abs((reg >> 4) - target) <= 1
-
-
-class TestPitchCounter:
-    def test_pitch_wraps_at_8bit(self):
-        """Pitch counter should stay within 0-255."""
-        chip = VotraxSC01A(use_native=False)
-        chip.phone_commit(0x24, 0)
-        # Run many updates
-        for _ in range(1000):
-            chip._chip_update()
-        assert 0 <= chip._pitch <= 255
-
-    def test_pitch_reset_value(self):
-        """Pitch should reset to 0 when reaching the pitch_reset value."""
-        chip = VotraxSC01A(use_native=False)
-        inflection = 1
-        chip._inflection = inflection
-        chip._filt_f1 = 5
-        pitch_reset = ((0xE0 ^ (inflection << 5) ^ (5 << 1)) + 2) & 0xFF
-        # Set pitch to just below reset point
-        chip._pitch = pitch_reset - 1
-        chip._chip_update()
-        # Should have wrapped to 0
-        assert chip._pitch == 0, f"Expected 0, got {chip._pitch} (reset={pitch_reset})"
-
-
-class TestNoiseLFSR:
-    def test_lfsr_nondegenerate(self):
-        """LFSR should not get stuck at 0 or all-ones."""
-        chip = VotraxSC01A(use_native=False)
-        chip.phone_commit(0x24, 0)
-
-        seen = set()
-        for _ in range(100):
-            chip._chip_update()
-            seen.add(chip._noise)
-
-        # Should have many distinct values
-        assert len(seen) > 50, f"LFSR produced only {len(seen)} distinct values"
-
-    def test_lfsr_stays_15bit(self):
-        """LFSR should remain within 15-bit range."""
-        chip = VotraxSC01A(use_native=False)
-        chip.phone_commit(0x24, 0)
-        for _ in range(1000):
-            chip._chip_update()
-            assert 0 <= chip._noise <= 0x7FFF
+from pyvotrax.constants import SCLOCK
 
 
 class TestDuration:
@@ -133,15 +55,6 @@ class TestGenerateSamples:
         rms = np.sqrt(np.mean(samples ** 2))
         assert rms > 1e-10, f"Output is silent (RMS={rms})"
 
-    def test_closure_attenuation(self):
-        """Closure should count up from 0 toward 28."""
-        chip = VotraxSC01A(use_native=False)
-        chip.phone_commit(0x24, 0)  # AH
-        # After some updates, closure should increase toward 28
-        chip.generate_samples(2000)
-        assert chip._closure >= 0
-        assert chip._closure <= 28
-
 
 def _spectral_centroid(phoneme_code, n_samples=16000):
     """Compute the power-weighted spectral centroid above 1 kHz for a phoneme.
@@ -161,6 +74,90 @@ def _spectral_centroid(phoneme_code, n_samples=16000):
     if total == 0:
         return 0.0
     return np.sum(freqs[mask] * power[mask]) / total
+
+
+class TestMasterClock:
+    def test_default_clock(self):
+        chip = VotraxSC01A()
+        assert chip.master_clock == 720_000.0
+        assert chip.sclock == pytest.approx(40_000.0)
+        assert chip.cclock == pytest.approx(20_000.0)
+
+    def test_custom_clock_changes_sclock(self):
+        chip = VotraxSC01A(master_clock=360_000.0)
+        assert chip.master_clock == 360_000.0
+        assert chip.sclock == pytest.approx(20_000.0)
+        assert chip.cclock == pytest.approx(10_000.0)
+
+    def test_slower_clock_stretches_phoneme(self):
+        """At half the master clock, AH should take ~2x as many generate calls to complete."""
+        def ticks_until_done(mc):
+            chip = VotraxSC01A(master_clock=mc)
+            chip.phone_commit(0x24, 0)  # AH
+            n = 0
+            while not chip.phone_done and n < 400_000:
+                chip.generate_one_sample()
+                n += 1
+            return n
+
+        fast = ticks_until_done(720_000.0)
+        slow = ticks_until_done(360_000.0)
+        # The sample-generation rate per audio second doesn't change from the
+        # chip's perspective — it always runs chip_update every 2 samples. So
+        # fast and slow should produce approximately the same sample count to
+        # reach phone_done. (The "stretching" is in audio seconds, not sample
+        # count, because SCLOCK also halves.)
+        assert abs(slow - fast) < max(fast, slow) * 0.05
+
+    def test_custom_clock_output_still_voiced(self):
+        """Non-default master clock should still produce non-silent voiced output."""
+        chip = VotraxSC01A(master_clock=540_000.0)
+        chip.phone_commit(0x24, 0)  # AH
+        samples = chip.generate_samples(4000)
+        assert np.all(np.isfinite(samples))
+        rms = np.sqrt(np.mean(samples ** 2))
+        assert rms > 1e-10
+
+    def test_fx_fudge_default(self):
+        chip = VotraxSC01A()
+        assert chip.fx_fudge == pytest.approx(150.0 / 4000.0)
+
+    def test_closure_strength_default(self):
+        chip = VotraxSC01A()
+        assert chip.closure_strength == pytest.approx(1.0)
+
+    def test_closure_strength_zero_changes_plosive(self):
+        """closure_strength=0 should change the output of a plosive phoneme
+        (B, code 0x0E) vs. the default closure curve."""
+        def render(strength):
+            chip = VotraxSC01A(closure_strength=strength)
+            chip.phone_commit(0x0E, 0)  # B (voiced stop)
+            return chip.generate_samples(8000)
+
+        default = render(1.0)
+        no_closure = render(0.0)
+        diff = float(np.sqrt(np.mean((default - no_closure) ** 2)))
+        # At closure_strength=0 there's no closure dip, so the output differs
+        default_rms = float(np.sqrt(np.mean(default ** 2)))
+        assert diff > 0.02 * max(default_rms, 1e-3), (
+            f"closure_strength=0 produced indistinguishable output for B "
+            f"(diff={diff}, default_rms={default_rms})"
+        )
+
+    def test_fx_fudge_as_schematic(self):
+        """fx_fudge=1.0 should give the 'as-schematic' 150 Hz behavior — much
+        more low-frequency energy than the authentic 4 kHz cutoff."""
+        def rms(chip):
+            chip.phone_commit(0x24, 0)  # AH
+            return float(np.sqrt(np.mean(chip.generate_samples(8000) ** 2)))
+
+        authentic = rms(VotraxSC01A(fx_fudge=150.0 / 4000.0))
+        muffled = rms(VotraxSC01A(fx_fudge=1.0))
+        # The "as-schematic" 150 Hz cutoff drops far more voice energy than the
+        # authentic 4 kHz cutoff, so authentic RMS should be meaningfully larger.
+        assert authentic > muffled, (
+            f"authentic RMS {authentic} not greater than muffled {muffled}"
+        )
 
 
 class TestSibilantDifferentiation:

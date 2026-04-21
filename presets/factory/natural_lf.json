@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "Natural (LF glottal)",
+  "description": "Enhanced-DSP path: Liljencrants-Fant glottal model, PolyBLEP, 2x oversampling, jitter/shimmer, nasal anti-resonators, per-fricative noise shapers. More natural voice at the cost of MAME authenticity and render speed.",
+  "mode": "text",
+  "input": "Hello world.",
+  "synth": {
+    "dc_block": true,
+    "radiation_filter": false,
+    "enhanced_dsp": true,
+    "rd": 1.0
+  },
+  "tts": {
+    "enhanced": true
+  }
+}

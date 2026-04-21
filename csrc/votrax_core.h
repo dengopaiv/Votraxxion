@@ -1,52 +1,42 @@
 // Votrax SC-01A chip-level emulation — C++ core.
 // Faithfully reproduces the MAME votrax.cpp analog signal path.
-// Optional enhanced mode: KLGLOTT88 glottal source + PolyBLEP + jitter/shimmer.
 #pragma once
 
 #include "filters.h"
 #include "rom_data.h"
-#include <random>
 
 // 9-level glottal waveform from MAME
 static constexpr double GLOTTAL[9] = {
     0.0, -4.0/7.0, 1.0, 6.0/7.0, 5.0/7.0, 4.0/7.0, 3.0/7.0, 2.0/7.0, 1.0/7.0
 };
 
-// KLGLOTT88 polynomial glottal pulse.
-// OQ = open quotient (fraction of period glottis is open), SQ = speed quotient.
-// Produces smooth waveform matching SC-01A duty cycle.
-inline double klglott88(double phase, double oq = 0.55, double sq = 2.0) {
-    if (phase >= oq) return 0.0;  // closed phase
-    double opening_end = oq / (1.0 + sq);
-    if (phase < opening_end) {
-        // Opening: smooth cubic rise (Hermite)
-        double t = phase / opening_end;
-        return 3.0 * t * t - 2.0 * t * t * t;
-    } else {
-        // Closing: quadratic fall
-        double t = (phase - opening_end) / (oq - opening_end);
-        return 1.0 - t * t;
-    }
-}
-
-// PolyBLEP correction at discontinuities.
-// t = phase (0 to 1), dt = 1/period_in_samples.
-inline double polyblep(double t, double dt) {
-    if (t < dt) {
-        t /= dt;
-        return t + t - t * t - 1.0;
-    }
-    if (t > 1.0 - dt) {
-        t = (t - 1.0) / dt;
-        return t * t + t + t + 1.0;
-    }
-    return 0.0;
-}
-
 class VotraxSC01ACore {
 public:
-    VotraxSC01ACore(bool enhanced = false)
-        : m_enhanced(enhanced), m_rng(42) { reset(); }
+    // `master_clock` is the SC-01A external clock in Hz. Nominal 720 000; the
+    // datasheet endorses varying it for sound-design effects (Figures 6/7).
+    // Smaller → slower/lower-pitched, larger → faster/higher-pitched.
+    // `fx_fudge` scales the final-stage lowpass cutoff. 150/4000 (default)
+    // matches MAME's observed-from-recordings behavior; 1.0 is "as-schematic".
+    // `closure_strength` scales how deeply plosive closures attenuate the output.
+    // 1.0 (default) reproduces MAME's curve; 0.0 disables the closure dip so
+    // plosives lose their punch; values >1.0 exaggerate the closure effect.
+    explicit VotraxSC01ACore(double master_clock = DEFAULT_MASTER_CLOCK,
+                             double fx_fudge = 150.0 / 4000.0,
+                             double closure_strength = 1.0)
+        : m_master_clock(master_clock),
+          m_sclock(sclock_from_master(master_clock)),
+          m_cclock(cclock_from_master(master_clock)),
+          m_fx_fudge(fx_fudge),
+          m_closure_strength(closure_strength)
+    {
+        reset();
+    }
+
+    double master_clock() const { return m_master_clock; }
+    double sclock() const { return m_sclock; }
+    double cclock() const { return m_cclock; }
+    double fx_fudge() const { return m_fx_fudge; }
+    double closure_strength() const { return m_closure_strength; }
 
     void reset() {
         m_phone = 0x3F;  // STOP
@@ -73,9 +63,6 @@ public:
         // Noise LFSR
         m_noise = 0;
         m_cur_noise = false;
-
-        // Enhanced mode state
-        m_pitch_period = 128;  // default period
 
         // Clear all filter histories
         std::memset(m_f1_xh, 0, sizeof(m_f1_xh));
@@ -107,6 +94,26 @@ public:
             m_cur_closure = m_rom.closure;
     }
 
+    // Commit a phoneme with explicit parameter overrides, bypassing the ROM
+    // lookup. All 12 fields become user-controlled: this turns the chip into a
+    // formant instrument driven by arbitrary parameters. m_phone is still
+    // stored (for reporting) but not used to fetch params.
+    void phone_commit_override(int phone, int inflection, const PhonemeParams& params) {
+        m_phone = phone & 0x3F;
+        m_inflection = inflection & 0x03;
+        m_rom = params;
+        m_phonetick = 0;
+        m_ticks = 0;
+        if (m_rom.cld == 0)
+            m_cur_closure = m_rom.closure;
+    }
+
+    // Read-only accessor: get the ROM-decoded parameters for a given phoneme
+    // code. Useful for UIs that want to show "defaults" alongside user overrides.
+    static PhonemeParams rom_params(int phone) {
+        return ROM_DATA[phone & 0x3F];
+    }
+
     double generate_one_sample() {
         m_sample_count++;
         if (m_sample_count % 2 == 0)
@@ -118,11 +125,13 @@ public:
         return m_ticks >= 0x10;
     }
 
-    bool enhanced() const { return m_enhanced; }
-
 private:
-    bool m_enhanced;
-    std::mt19937 m_rng;
+    // --- Clock and tunable-curve configuration (set at construction) ---
+    double m_master_clock;
+    double m_sclock;
+    double m_cclock;
+    double m_fx_fudge;
+    double m_closure_strength;
 
     // --- State ---
     int m_phone;
@@ -147,9 +156,6 @@ private:
     int m_noise;
     bool m_cur_noise;
 
-    // Enhanced mode: pitch period tracking
-    int m_pitch_period;
-
     // Filter coefficients
     double m_f1_a[4], m_f1_b[4];
     double m_f2v_a[4], m_f2v_b[4];
@@ -170,27 +176,33 @@ private:
 
     // --- Filter building ---
     void build_fixed_filters() {
-        build_standard_filter(m_f4_a, m_f4_b, 0, 28810, 1165, 21457, 8558, 7289);
-        build_lowpass_filter(m_fx_a, m_fx_b, 1122, 23131);
-        build_noise_shaper_filter(m_ns_a, m_ns_b, 15500, 14854, 8450, 9523, 14083);
+        build_standard_filter(m_f4_a, m_f4_b, m_sclock, m_cclock,
+            0, 28810, 1165, 21457, 8558, 7289);
+        build_lowpass_filter(m_fx_a, m_fx_b, m_sclock, m_cclock,
+            1122, 23131, m_fx_fudge);
+        build_noise_shaper_filter(m_ns_a, m_ns_b, m_sclock, m_cclock,
+            15500, 14854, 8450, 9523, 14083);
     }
 
     void build_variable_filters() {
         double f1_caps[] = {2546, 4973, 9861, 19724};
         double f1_c3 = 2280 + bits_to_caps(m_filt_f1, f1_caps, 4);
-        build_standard_filter(m_f1_a, m_f1_b, 11247, 11797, 949, 52067, f1_c3, 166272);
+        build_standard_filter(m_f1_a, m_f1_b, m_sclock, m_cclock,
+            11247, 11797, 949, 52067, f1_c3, 166272);
 
         double f2q_caps[] = {1390, 2965, 5875, 11297};
         double f2_caps[] = {833, 1663, 3164, 6327, 12654};
         double f2v_c2t = 829 + bits_to_caps(m_filt_f2q, f2q_caps, 4);
         double f2v_c3 = 2352 + bits_to_caps(m_filt_f2, f2_caps, 5);
-        build_standard_filter(m_f2v_a, m_f2v_b, 24840, 29154, f2v_c2t, 38180, f2v_c3, 34270);
+        build_standard_filter(m_f2v_a, m_f2v_b, m_sclock, m_cclock,
+            24840, 29154, f2v_c2t, 38180, f2v_c3, 34270);
 
         double f3_caps[] = {2226, 4485, 9056, 18111};
         double f3_c3 = 8480 + bits_to_caps(m_filt_f3, f3_caps, 4);
-        build_standard_filter(m_f3_a, m_f3_b, 0, 17594, 868, 18828, f3_c3, 50019);
+        build_standard_filter(m_f3_a, m_f3_b, m_sclock, m_cclock,
+            0, 17594, 868, 18828, f3_c3, 50019);
 
-        build_injection_filter(m_f2n_a, m_f2n_b,
+        build_injection_filter(m_f2n_a, m_f2n_b, m_sclock, m_cclock,
             29154,
             829 + bits_to_caps(m_filt_f2q, f2q_caps, 4),
             38180,
@@ -255,21 +267,8 @@ private:
         // Pitch counter
         m_pitch = (m_pitch + 1) & 0xFF;
         int pitch_target = ((0xE0 ^ (m_inflection << 5) ^ (m_filt_f1 << 1)) + 2);
-
-        if (m_enhanced) {
-            // Apply jitter: ~1.5% Gaussian perturbation
-            std::normal_distribution<double> jitter_dist(0.0, 0.015 * pitch_target);
-            int jittered = pitch_target + static_cast<int>(jitter_dist(m_rng));
-            if (m_pitch == jittered) {
-                m_pitch_period = jittered;
-                m_pitch = 0;
-            }
-        } else {
-            if (m_pitch == pitch_target) {
-                m_pitch_period = pitch_target;
-                m_pitch = 0;
-            }
-        }
+        if (m_pitch == pitch_target)
+            m_pitch = 0;
 
         if ((m_pitch & 0xF9) == 0x08)
             commit_filters();
@@ -281,30 +280,9 @@ private:
     }
 
     double analog_calc() {
-        double glottal;
-
-        if (m_enhanced) {
-            // KLGLOTT88 polynomial pulse with PolyBLEP
-            double period = (m_pitch_period > 0) ? static_cast<double>(m_pitch_period) : 128.0;
-            double phase = static_cast<double>(m_pitch) / period;
-            if (phase >= 1.0) phase = 0.0;
-
-            glottal = klglott88(phase);
-
-            // PolyBLEP at glottal closure (phase ~ OQ = 0.55)
-            double dt = 1.0 / period;
-            double closure_phase = phase - 0.55;
-            if (closure_phase < 0.0) closure_phase += 1.0;
-            glottal += polyblep(closure_phase, dt) * 0.5;
-
-            // Shimmer: ~3% amplitude variation
-            std::normal_distribution<double> shimmer_dist(1.0, 0.03);
-            glottal *= shimmer_dist(m_rng);
-        } else {
-            // Original 9-level MAME glottal waveform
-            int glot_idx = m_pitch >> 3;
-            glottal = (glot_idx < 9) ? GLOTTAL[glot_idx] : 0.0;
-        }
+        // Original 9-level MAME glottal waveform
+        int glot_idx = m_pitch >> 3;
+        double glottal = (glot_idx < 9) ? GLOTTAL[glot_idx] : 0.0;
 
         // Voice path: glottal * va/15 -> F1 -> F2v
         double voice = glottal * (m_filt_va / 15.0);
@@ -345,7 +323,10 @@ private:
         double f4_out = apply_filter<4, 4>(m_f4_xh, m_f4_yh, m_f4_a, m_f4_b);
         shift_hist<3>(f4_out, m_f4_yh);
 
-        double closure_atten = (7 ^ (m_closure >> 2)) / 7.0;
+        // MAME closure curve, scaled by closure_strength: 1.0 = authentic,
+        // 0.0 = no closure dip, >1.0 = exaggerated.
+        double mame_atten = (7 ^ (m_closure >> 2)) / 7.0;
+        double closure_atten = 1.0 - m_closure_strength * (1.0 - mame_atten);
         double closure_out = f4_out * closure_atten;
 
         shift_hist<2>(closure_out, m_fx_xh);

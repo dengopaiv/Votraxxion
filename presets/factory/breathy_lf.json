@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "Breathy (LF, Rd=2.0)",
+  "description": "Enhanced-DSP path with LF Rd=2.0 — a more lax/breathy voice quality.",
+  "mode": "phoneme_string",
+  "input": "AH:2 E:2 I:2 O:2 U:2 STOP",
+  "synth": {
+    "dc_block": true,
+    "radiation_filter": false,
+    "enhanced_dsp": true,
+    "rd": 2.0
+  },
+  "tts": {
+    "enhanced": true
+  }
+}

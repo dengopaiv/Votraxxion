@@ -25,7 +25,7 @@ from logHandler import log
 
 from pyvotrax.tts import VotraxTTS
 from pyvotrax.synth import VotraxSynthesizer
-from pyvotrax.filters import SCLOCK
+from pyvotrax.constants import SCLOCK
 
 
 class SynthDriver(synthDriverHandler.SynthDriver):

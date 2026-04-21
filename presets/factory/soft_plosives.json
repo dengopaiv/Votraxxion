@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "name": "Soft plosives",
+  "description": "Same as default but with closure_strength reduced to 0.4, which softens the D/B/G/T/K/P onset clicks that are authentic to the SC-01A but harsh in music production. Diverges from MAME-faithful chip output.",
+  "mode": "text",
+  "input": "Danger, buddy, dog, pack.",
+  "synth": {
+    "master_clock": 720000.0,
+    "fx_fudge": 0.0375,
+    "closure_strength": 0.4,
+    "dc_block": true,
+    "radiation_filter": false
+  },
+  "tts": {
+    "enhanced": false
+  }
+}

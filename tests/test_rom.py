@@ -1,7 +1,7 @@
 """Tests for ROM data extraction and parameter ranges."""
 
 import pytest
-from pyvotrax.rom import ROM_DATA, PhonemeParams, _RAW_ROM
+from py_emu.rom import ROM_DATA, PhonemeParams, _RAW_ROM
 
 
 class TestROMData:

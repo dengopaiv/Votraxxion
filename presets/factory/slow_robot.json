@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "Slow robot",
+  "description": "Master clock dropped to 360 kHz — half speed, octave-ish down. Classic sci-fi sound.",
+  "mode": "phoneme_string",
+  "input": "I AE M A R O B AH T STOP",
+  "synth": {
+    "master_clock": 360000.0,
+    "fx_fudge": 0.0375,
+    "dc_block": true,
+    "radiation_filter": false
+  },
+  "tts": {
+    "enhanced": false
+  }
+}

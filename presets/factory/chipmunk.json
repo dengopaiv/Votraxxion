@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "Chipmunk",
+  "description": "Master clock raised to 1.08 MHz (1.5x nominal) — faster, higher-pitched.",
+  "mode": "text",
+  "input": "Hello world.",
+  "synth": {
+    "master_clock": 1080000.0,
+    "fx_fudge": 0.0375,
+    "dc_block": true,
+    "radiation_filter": false
+  },
+  "tts": {
+    "enhanced": false
+  }
+}

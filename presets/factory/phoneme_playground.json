@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "Phoneme playground",
+  "description": "Direct-phoneme-mode seed. Shows per-phoneme inflection (:0-:3) and the repeat operator (*N).",
+  "mode": "phoneme_string",
+  "input": "# Try varying inflection per phoneme, or repeating phonemes for length\nAH:0 AH:1 AH:2 AH:3\nPA1\nE*3 STOP",
+  "synth": {
+    "master_clock": 720000.0,
+    "fx_fudge": 0.0375,
+    "dc_block": true,
+    "radiation_filter": false
+  },
+  "tts": {
+    "enhanced": false
+  }
+}
