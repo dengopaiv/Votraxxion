@@ -14,8 +14,9 @@ script insists on. The x86 build ships alongside it for NVDA 2025 and earlier,
 which ran as 32-bit processes; the driver picks between them at load time from
 the bitness of the interpreter it finds itself in, so one add-on serves both.
 
-Building needs MSVC — run from a Developer Command Prompt, or let the script
-find vcvars itself.
+Building needs a C compiler. This script drives MSVC, and finds vcvars
+itself if you are not already in a Developer Command Prompt; the sources are
+plain C11 and build under MinGW or clang just as well.
 """
 
 import configparser
@@ -27,8 +28,14 @@ import zipfile
 
 ADDON_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(ADDON_DIR)
-CSRC = os.path.join(ROOT_DIR, "csrc")
-SOURCE = os.path.join(CSRC, "votrax_capi.cpp")
+SRC = os.path.join(ROOT_DIR, "src")
+
+#: The whole synthesizer.  C11, no libc beyond string.h and math.h, and no
+#: dependency on the C++ runtime -- which is the point: an add-on that needs a
+#: redistributable a user may not have fails by NVDA silently not listing the
+#: synth, with no error anyone can act on.
+SOURCES = ("votrax.c", "votrax_core.c", "votrax_filters.c", "votrax_rom.c",
+           "ttv.c", "ttv_tables.c")
 DRIVER_DIR = os.path.join(ADDON_DIR, "addon", "synthDrivers")
 BUILD_DIR = os.path.join(ADDON_DIR, "build")
 
@@ -70,17 +77,31 @@ def build_dll(vcvars_name, output_name, required):
 
     os.makedirs(BUILD_DIR, exist_ok=True)
     out = os.path.join(DRIVER_DIR, output_name)
-    obj_prefix = os.path.join(BUILD_DIR, output_name.replace(".dll", "_"))
+    obj_dir = os.path.join(BUILD_DIR, output_name.replace(".dll", ""))
+    os.makedirs(obj_dir, exist_ok=True)
 
     # Run it from a batch file rather than `cmd /c "..."`: the nested quoting
     # a vcvars path with spaces needs does not survive being handed to cmd as
     # a single argument.
     script = os.path.join(BUILD_DIR, output_name.replace(".dll", ".bat"))
+
+    # Everything below is shaped around two MSVC command-line quirks that only
+    # bite when a path contains a space, which this repository's does.
+    #
+    # /Fo must name a directory when there are several source files, and a
+    # directory name ends in a backslash -- but a trailing backslash inside
+    # quotes escapes the closing quote and swallows the rest of the line. So
+    # /Fo cannot be quoted, and therefore cannot contain a space. Compiling
+    # from inside the source directory and naming the object directory
+    # relatively keeps it space-free whatever the repository is called.
+    obj_rel = os.path.relpath(obj_dir, SRC)
+    names = " ".join(SOURCES)
     lines = [
         "@echo off",
         f'call "{vcvars}" >nul',
-        (f'cl /nologo /std:c++17 /EHsc /W4 /O2 /LD '
-         f'/I"{CSRC}" /Fe:"{out}" /Fo:"{obj_prefix}" "{SOURCE}"'),
+        f'cd /d "{SRC}"',
+        (f'cl /nologo /std:c11 /W4 /O2 /LD '
+         f'/I. /Fe:"{out}" /Fo:{obj_rel}\\ {names}'),
     ]
     with open(script, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
@@ -149,8 +170,9 @@ def verify(output):
 
 
 def main():
-    if not os.path.isfile(SOURCE):
-        print(f"ERROR: {SOURCE} not found")
+    missing = [n for n in SOURCES if not os.path.isfile(os.path.join(SRC, n))]
+    if missing:
+        print(f"ERROR: not found in {SRC}: {', '.join(missing)}")
         sys.exit(1)
 
     print("Building native libraries...")

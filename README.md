@@ -1,19 +1,26 @@
-# Votrax SC-01A Workbench
+# Votrax SC-01
 
-A Python + C++ emulator of the Votrax SC-01A speech synthesizer chip, packaged
-as a Windows music-production workbench and an NVDA addon.
+An emulator of the Votrax SC-01 speech synthesizer chip, in C, packaged as an
+NVDA screen-reader add-on and as a Windows music-production workbench.
 
-The DSP core is hand-built from the schematics extracted from die photographs,
-published at [og.kervella.org/sc01a](http://og.kervella.org/sc01a). The C++
-port tracks [MAME's votrax.cpp](https://github.com/mamedev/mame/blob/master/src/devices/sound/votrax.cpp).
-For deeper background, see `docs/tech-overview.md`.
+The synthesizer is C with no dependencies -- not on Python, not on a phoneme
+dictionary, not on a ROM file. Both mask ROMs and the whole English front end
+are compiled in, so the NVDA add-on is one Python shim and one 153 KB library
+per architecture, and nothing else.
+
+The DSP is hand-built from the schematics extracted from die photographs,
+published at [og.kervella.org/sc01a](http://og.kervella.org/sc01a), and tracks
+[MAME's votrax.cpp](https://github.com/mamedev/mame/blob/master/src/devices/sound/votrax.cpp).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit
+together and [docs/tech-overview.md](docs/tech-overview.md) for the chip
+itself.
 
 ## Running from source
 
 Prerequisites:
 
 - Python 3.9+
-- A C++ compiler toolchain for the pybind11 extension (on Windows: MSVC via
+- A compiler toolchain for the pybind11 extension (on Windows: MSVC via
   Visual Studio Build Tools).
 
 Install and build:
@@ -24,6 +31,9 @@ python setup.py build_ext --inplace
 python -m pytest tests/
 python -m pyvotrax
 ```
+
+`setup.py` builds the pybind11 shim in `csrc/` against the C core in `src/`.
+The NVDA add-on does not go through it — see below.
 
 `pip install -e .[gui]` pulls in `wxPython` and `sounddevice`, which the GUI
 needs; the core package without `[gui]` suffices for library / NVDA-addon use.
@@ -94,38 +104,70 @@ beyond your own machine.
 
 ## Building the standalone synthesizer
 
-The synthesizer proper is C++ and has no dependencies — not on Python, not on
-a phoneme dictionary, not on a ROM file. Both SC-01 mask ROMs and the whole
-English front end are compiled in, so the result is one library and nothing
-beside it. `csrc/votrax_capi.h` is the C API; `docs/tech-overview.md`, Part 4, has
-the details.
+`src/votrax.h` is the C API; `docs/tech-overview.md`, Part 4, has the details.
 
-Windows, MSVC (from a Developer Command Prompt):
+Windows, MSVC (from a Developer Command Prompt). Compile from inside `src/`:
+MSVC's `/Fo` will not take a quoted path ending in a backslash, so a repository
+path with a space in it breaks the obvious command line.
 
 ```
-cl /std:c++17 /EHsc /O2 /LD /Icsrc /Fe:votraxsc01.dll csrcotrax_capi.cpp
+cd src
+cl /std:c11 /O2 /LD /I. /Fe:votraxsc01.dll votrax.c votrax_core.c votrax_filters.c votrax_rom.c ttv.c ttv_tables.c
 ```
 
 Linux or macOS:
 
 ```
-c++ -std=c++17 -O2 -shared -fPIC -Icsrc -o libvotraxsc01.so csrc/votrax_capi.cpp
+cc -std=c11 -O2 -shared -fPIC -Isrc -o libvotraxsc01.so src/*.c
 ```
 
-Driving it is the loop any Votrax front end has always used — hand the chip a
-phone when it asks for one, and render audio in between:
+Driving it is the loop any Votrax front end has always used — turn text into
+phones, queue them, and pull audio until the queue drains:
 
 ```python
-import ctypes
+import ctypes, wave
+
 lib = ctypes.CDLL("./votraxsc01.dll")
-lib.vx_create.restype = ctypes.c_void_p
-lib.vx_create.argtypes = [ctypes.c_int, ctypes.c_uint]
-lib.vx_sample_rate.restype = ctypes.c_double
-lib.vx_sample_rate.argtypes = [ctypes.c_void_p]
+u8p = ctypes.POINTER(ctypes.c_ubyte)
+for name, args, ret in [
+    ("vx_create",      [ctypes.c_int, ctypes.c_uint],              ctypes.c_void_p),
+    ("vx_destroy",     [ctypes.c_void_p],                          None),
+    ("vx_sample_rate", [ctypes.c_void_p],                          ctypes.c_double),
+    ("vx_speak",       [ctypes.c_void_p, u8p, ctypes.c_int],       ctypes.c_int),
+    ("vx_pending",     [ctypes.c_void_p],                          ctypes.c_int),
+    ("vx_render",      [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int16), ctypes.c_int], ctypes.c_int),
+    ("ttv_translate",  [ctypes.c_char_p, u8p, ctypes.c_int],       ctypes.c_int),
+]:
+    fn = getattr(lib, name)
+    fn.argtypes, fn.restype = args, ret
 
 chip = lib.vx_create(1, 0)          # 1 = the 1980 SC-01 mask, 0 = default clock
-buf = ctypes.create_string_buffer(4096)
-n = lib.ttv_translate(b"Hello.", buf, 4096)
+
+phones = (ctypes.c_ubyte * 4096)()
+n = lib.ttv_translate(b"Hello world.", phones, 4096)
+lib.vx_speak(chip, phones, n)
+
+BLOCK = 512
+audio, block = bytearray(), (ctypes.c_int16 * BLOCK)()
+
+def pull():
+    # Never ask for more samples than the buffer holds: vx_render writes
+    # exactly what it is told to and does not know how big the buffer is.
+    lib.vx_render(chip, block, BLOCK)
+    audio.extend(memoryview(block).cast("B"))
+
+while lib.vx_pending(chip):
+    pull()
+for _ in range(8):                  # the last phone is still sounding
+    pull()
+
+with wave.open("hello.wav", "wb") as w:
+    w.setnchannels(1)
+    w.setsampwidth(2)
+    w.setframerate(int(lib.vx_sample_rate(chip)))
+    w.writeframes(audio)
+
+lib.vx_destroy(chip)
 ```
 
 Declare every `argtypes` before calling: without them ctypes guesses, and a
@@ -134,17 +176,17 @@ the heap wanders past 4 GB.
 
 ## Building the NVDA addon
 
-The native add-on is one Python file and one DLL per architecture — about
-169 KB in total, with no bundled wheels, no pronunciation dictionary and no
-ROM files:
+The add-on is one Python file and one DLL per architecture — 142 KB in total,
+with no bundled wheels, no pronunciation dictionary and no ROM files:
 
 ```
 cd nvda-addon
 python package.py
 ```
 
-That builds both libraries (MSVC required; the script finds vcvars itself) and
-writes `votraxsc01-1.0.0.nvda-addon`. NVDA 2026 is 64-bit only, so the x64
+That builds both libraries (the script drives MSVC and finds vcvars itself; the
+sources are plain C11 and build under MinGW or clang too) and writes
+`votraxsc01-1.0.0.nvda-addon`. NVDA 2026 is 64-bit only, so the x64
 library is the one it loads and the packager refuses to produce an add-on
 without it; the x86 library ships alongside for NVDA 2025 and earlier, which
 ran 32-bit. The driver picks between them from the bitness of the process it
@@ -158,8 +200,7 @@ behaviour), and pitch quantised to the chip's four real inflection levels.
 so the shim can be tested without a screen reader; it skips if the DLL has not
 been built.
 
-### The older Python-based addon
-
-`nvda-addon/` holds the previous driver, which used the pyvotrax emulator with
-numpy, scipy and CMUdict bundled alongside (~40 MB). It is superseded by the
-native add-on above but still builds with `python nvda-addon/package.py`.
+There was an earlier driver that ran the pyvotrax emulator with numpy, scipy
+and CMUdict bundled alongside it, about 40 MB in all. The native add-on does
+the same job in 142 KB and replaced it; it is in the git history if you want to
+see it.

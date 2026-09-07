@@ -1,59 +1,52 @@
-// Letter-to-sound tables for a self-contained SC-01 text-to-speech front end.
-//
-// Two stages, both pure data:
-//
-//   1. NRL_RULES -- English spelling to ARPABET, by the Naval Research
-//      Laboratory letter-to-sound ruleset (Elovitz et al., NRL Report 7948,
-//      1976), in the arrangement popularised by John A. Wasser's public-domain
-//      english.c (1985) and shipped in Votrax-era products.  355 rules in 27
-//      groups: punctuation, then one group per letter A-Z.
-//
-//   2. ARPABET_TO_SC01 -- ARPABET to SC-01 phone names, context sensitive.
-//      This is the interesting half: it is tuned to the SC-01's actual phone
-//      inventory rather than to a general phoneme set.  Diphthongs are spelled
-//      out as two-phone glides (AY -> "AH E1"), affricates as stop+fricative
-//      (CH -> "T CH"), and vowels take an UH3 onglide or an I3/EH3 offglide
-//      next to liquids, which is how the chip's interpolator is coaxed into
-//      sounding like coarticulation.
-//
-// Rule format, matching the NRL convention:
-//
-//   {left context, match, right context, output}
-//
-// The matcher walks the text left to right.  At each position it takes the
-// group for the current character and tries each rule in order; the first
-// whose `match` is present at the cursor and whose contexts both hold wins,
-// its `out` is appended, and the cursor advances by strlen(match).
-//
-// Context character classes:
-//
-//   #  one or more vowels        :  zero or more consonants
-//   ^  one consonant             +  a front vowel (E, I or Y)
-//   %  a suffix -- E, ER, ES, ED, ING or ELY (right context only)
-//   .  a voiced consonant (B D V G J L M N R W Z)
-//
-// Any other character matches itself literally; a space matches a word
-// boundary.  Left contexts are written in reverse reading order, so the
-// character nearest the cursor comes last.
-//
-// Provenance: recovered from the compiled tables of a third-party NVDA driver
-// (sc01.dll, 2026) and cross-checked against the published NRL ruleset.  The
-// NRL rules are a US Government work; Wasser's arrangement was placed in the
-// public domain.  Kept here as source so the synthesizer needs no dictionary,
-// no data file and no runtime download -- see docs/tech-overview.md, Part 4.
-#pragma once
+/** Letter-to-sound tables for a self-contained SC-01 text-to-speech front end.
+ *
+ * Two stages, both pure data:
+ *
+ *   1. NRL_RULES -- English spelling to ARPABET, by the Naval Research
+ *      Laboratory letter-to-sound ruleset (Elovitz et al., NRL Report 7948,
+ *      1976), in the arrangement popularised by John A. Wasser's public-domain
+ *      english.c (1985) and shipped in Votrax-era products.  355 rules in 27
+ *      groups: punctuation, then one group per letter A-Z.
+ *
+ *   2. ARPABET_TO_SC01 -- ARPABET to SC-01 phone names, context sensitive.
+ *      This is the interesting half: it is tuned to the SC-01's actual phone
+ *      inventory rather than to a general phoneme set.  Diphthongs are spelled
+ *      out as two-phone glides (AY -> "AH E1"), affricates as stop+fricative
+ *      (CH -> "T CH"), and vowels take an UH3 onglide or an I3/EH3 offglide
+ *      next to liquids, which is how the chip's interpolator is coaxed into
+ *      sounding like coarticulation.
+ *
+ * Rule format, matching the NRL convention:
+ *
+ *   {left context, match, right context, output}
+ *
+ * The matcher walks the text left to right.  At each position it takes the
+ * group for the current character and tries each rule in order; the first
+ * whose `match` is present at the cursor and whose contexts both hold wins,
+ * its `out` is appended, and the cursor advances by strlen(match).
+ *
+ * Context character classes:
+ *
+ *   #  one or more vowels        :  zero or more consonants
+ *   ^  one consonant             +  a front vowel (E, I or Y)
+ *   %  a suffix -- E, ER, ES, ED, ING or ELY (right context only)
+ *   .  a voiced consonant (B D V G J L M N R W Z)
+ *
+ * Any other character matches itself literally; a space matches a word
+ * boundary.  Left contexts are written in reverse reading order, so the
+ * character nearest the cursor comes last.
+ *
+ * Provenance: recovered from the compiled tables of a third-party NVDA driver
+ * (sc01.dll, 2026) and cross-checked against the published NRL ruleset.  The
+ * NRL rules are a US Government work; Wasser's arrangement was placed in the
+ * public domain.  Kept here as source so the synthesizer needs no dictionary,
+ * no data file and no runtime download -- see docs/tech-overview.md, Part 4.
+ */
 
-#include <cstddef>
-
-struct TtvRule {
-    const char *left;    // left context, written right-to-left
-    const char *match;   // literal letters to match at the cursor
-    const char *right;   // right context
-    const char *out;     // ARPABET output
-};
+#include "ttv_tables.h"
 
 
-static const TtvRule NRL_RULES_PUNCT[] = {
+static const ttv_rule NRL_RULES_PUNCT[] = {
     { "",        " ",         "",        " " },
     { "",        "-",         "",        "" },
     { ".",       "'S",        "",        "z" },
@@ -66,7 +59,7 @@ static const TtvRule NRL_RULES_PUNCT[] = {
     { "",        "!",         "",        " " },
 };
 
-static const TtvRule NRL_RULES_A[] = {
+static const ttv_rule NRL_RULES_A[] = {
     { "",        "A",         " ",       "AX" },
     { " ",       "ARE",       " ",       "AAr" },
     { " ",       "AR",        "O",       "AXr" },
@@ -102,7 +95,7 @@ static const TtvRule NRL_RULES_A[] = {
     { "",        "A",         "",        "AE" },
 };
 
-static const TtvRule NRL_RULES_B[] = {
+static const ttv_rule NRL_RULES_B[] = {
     { " ",       "BE",        "^#",      "bIH" },
     { "",        "BEING",     "",        "bIYIHNG" },
     { " ",       "BOTH",      " ",       "bOWTH" },
@@ -111,7 +104,7 @@ static const TtvRule NRL_RULES_B[] = {
     { "",        "B",         "",        "b" },
 };
 
-static const TtvRule NRL_RULES_C[] = {
+static const ttv_rule NRL_RULES_C[] = {
     { " ",       "CH",        "^",       "k" },
     { "^E",      "CH",        "",        "k" },
     { "",        "CH",        "",        "CH" },
@@ -125,7 +118,7 @@ static const TtvRule NRL_RULES_C[] = {
     { "",        "C",         "",        "k" },
 };
 
-static const TtvRule NRL_RULES_D[] = {
+static const ttv_rule NRL_RULES_D[] = {
     { "#:",      "DED",       " ",       "dIHd" },
     { ".E",      "D",         " ",       "d" },
     { "#:^E",    "D",         " ",       "t" },
@@ -138,7 +131,7 @@ static const TtvRule NRL_RULES_D[] = {
     { "",        "D",         "",        "d" },
 };
 
-static const TtvRule NRL_RULES_E[] = {
+static const ttv_rule NRL_RULES_E[] = {
     { "#:",      "E",         " ",       "" },
     { "':^",     "E",         " ",       "" },
     { " :",      "E",         " ",       "IY" },
@@ -193,12 +186,12 @@ static const TtvRule NRL_RULES_E[] = {
     { "",        "E",         "",        "EH" },
 };
 
-static const TtvRule NRL_RULES_F[] = {
+static const ttv_rule NRL_RULES_F[] = {
     { "",        "FUL",       "",        "fUHl" },
     { "",        "F",         "",        "f" },
 };
 
-static const TtvRule NRL_RULES_G[] = {
+static const ttv_rule NRL_RULES_G[] = {
     { "",        "GIV",       "",        "gIHv" },
     { " ",       "G",         "I^",      "g" },
     { "",        "GE",        "T",       "gEH" },
@@ -211,7 +204,7 @@ static const TtvRule NRL_RULES_G[] = {
     { "",        "G",         "",        "g" },
 };
 
-static const TtvRule NRL_RULES_H[] = {
+static const ttv_rule NRL_RULES_H[] = {
     { " ",       "HAV",       "",        "hAEv" },
     { " ",       "HERE",      "",        "hIYr" },
     { " ",       "HOUR",      "",        "AWER" },
@@ -220,7 +213,7 @@ static const TtvRule NRL_RULES_H[] = {
     { "",        "H",         "",        "" },
 };
 
-static const TtvRule NRL_RULES_I[] = {
+static const ttv_rule NRL_RULES_I[] = {
     { " ",       "IN",        "",        "IHn" },
     { " ",       "I",         " ",       "AY" },
     { "",        "IN",        "D",       "AYn" },
@@ -251,16 +244,16 @@ static const TtvRule NRL_RULES_I[] = {
     { "",        "I",         "",        "IH" },
 };
 
-static const TtvRule NRL_RULES_J[] = {
+static const ttv_rule NRL_RULES_J[] = {
     { "",        "J",         "",        "j" },
 };
 
-static const TtvRule NRL_RULES_K[] = {
+static const ttv_rule NRL_RULES_K[] = {
     { " ",       "K",         "N",       "" },
     { "",        "K",         "",        "k" },
 };
 
-static const TtvRule NRL_RULES_L[] = {
+static const ttv_rule NRL_RULES_L[] = {
     { "",        "LO",        "C#",      "lOW" },
     { "L",       "L",         "",        "" },
     { "#:^",     "L",         "%",       "AXl" },
@@ -268,12 +261,12 @@ static const TtvRule NRL_RULES_L[] = {
     { "",        "L",         "",        "l" },
 };
 
-static const TtvRule NRL_RULES_M[] = {
+static const ttv_rule NRL_RULES_M[] = {
     { "",        "MOV",       "",        "mUWv" },
     { "",        "M",         "",        "m" },
 };
 
-static const TtvRule NRL_RULES_N[] = {
+static const ttv_rule NRL_RULES_N[] = {
     { "E",       "NG",        "+",       "nj" },
     { "",        "NG",        "R",       "NGg" },
     { "",        "NG",        "#",       "NGg" },
@@ -284,7 +277,7 @@ static const TtvRule NRL_RULES_N[] = {
     { "",        "N",         "",        "n" },
 };
 
-static const TtvRule NRL_RULES_O[] = {
+static const ttv_rule NRL_RULES_O[] = {
     { "",        "OF",        " ",       "AXv" },
     { "",        "OROUGH",    "",        "EROW" },
     { "#:",      "OR",        " ",       "ER" },
@@ -335,7 +328,7 @@ static const TtvRule NRL_RULES_O[] = {
     { "",        "O",         "",        "AA" },
 };
 
-static const TtvRule NRL_RULES_P[] = {
+static const ttv_rule NRL_RULES_P[] = {
     { "",        "PH",        "",        "f" },
     { "",        "PEOP",      "",        "pIYp" },
     { "",        "POW",       "",        "pAW" },
@@ -343,18 +336,18 @@ static const TtvRule NRL_RULES_P[] = {
     { "",        "P",         "",        "p" },
 };
 
-static const TtvRule NRL_RULES_Q[] = {
+static const ttv_rule NRL_RULES_Q[] = {
     { "",        "QUAR",      "",        "kwAOr" },
     { "",        "QU",        "",        "kw" },
     { "",        "Q",         "",        "k" },
 };
 
-static const TtvRule NRL_RULES_R[] = {
+static const ttv_rule NRL_RULES_R[] = {
     { " ",       "RE",        "^#",      "rIY" },
     { "",        "R",         "",        "r" },
 };
 
-static const TtvRule NRL_RULES_S[] = {
+static const ttv_rule NRL_RULES_S[] = {
     { "",        "SH",        "",        "SH" },
     { "#",       "SION",      "",        "ZHAXn" },
     { "",        "SOME",      "",        "sAHm" },
@@ -380,7 +373,7 @@ static const TtvRule NRL_RULES_S[] = {
     { "",        "S",         "",        "s" },
 };
 
-static const TtvRule NRL_RULES_T[] = {
+static const ttv_rule NRL_RULES_T[] = {
     { " ",       "THE",       " ",       "DHAX" },
     { "",        "TO",        " ",       "tUW" },
     { "",        "THAT",      " ",       "DHAEt" },
@@ -409,7 +402,7 @@ static const TtvRule NRL_RULES_T[] = {
     { "",        "T",         "",        "t" },
 };
 
-static const TtvRule NRL_RULES_U[] = {
+static const ttv_rule NRL_RULES_U[] = {
     { " ",       "UN",        "I",       "yUWn" },
     { " ",       "UN",        "",        "AHn" },
     { " ",       "UPON",      "",        "AXpAOn" },
@@ -447,12 +440,12 @@ static const TtvRule NRL_RULES_U[] = {
     { "",        "U",         "",        "yUW" },
 };
 
-static const TtvRule NRL_RULES_V[] = {
+static const ttv_rule NRL_RULES_V[] = {
     { "",        "VIEW",      "",        "vyUW" },
     { "",        "V",         "",        "v" },
 };
 
-static const TtvRule NRL_RULES_W[] = {
+static const ttv_rule NRL_RULES_W[] = {
     { " ",       "WERE",      "",        "wER" },
     { "",        "WA",        "S",       "wAA" },
     { "",        "WA",        "T",       "wAA" },
@@ -467,11 +460,11 @@ static const TtvRule NRL_RULES_W[] = {
     { "",        "W",         "",        "w" },
 };
 
-static const TtvRule NRL_RULES_X[] = {
+static const ttv_rule NRL_RULES_X[] = {
     { "",        "X",         "",        "ks" },
 };
 
-static const TtvRule NRL_RULES_Y[] = {
+static const ttv_rule NRL_RULES_Y[] = {
     { "",        "YOUNG",     "",        "yAHNG" },
     { " ",       "YOU",       "",        "yUW" },
     { " ",       "YES",       "",        "yEHs" },
@@ -485,47 +478,46 @@ static const TtvRule NRL_RULES_Y[] = {
     { "",        "Y",         "",        "IH" },
 };
 
-static const TtvRule NRL_RULES_Z[] = {
+static const ttv_rule NRL_RULES_Z[] = {
     { "",        "Z",         "",        "z" },
 };
 
 // Indexed by letter: [0] is the punctuation/space group, [1 + c - 'A'] the
 // group for an upper-case letter.
-struct TtvRuleGroup { const TtvRule *rules; std::size_t count; };
 
-static const TtvRuleGroup NRL_RULES[27] = {
-    { NRL_RULES_PUNCT,  sizeof(NRL_RULES_PUNCT) / sizeof(TtvRule) },
-    { NRL_RULES_A,      sizeof(NRL_RULES_A) / sizeof(TtvRule) },
-    { NRL_RULES_B,      sizeof(NRL_RULES_B) / sizeof(TtvRule) },
-    { NRL_RULES_C,      sizeof(NRL_RULES_C) / sizeof(TtvRule) },
-    { NRL_RULES_D,      sizeof(NRL_RULES_D) / sizeof(TtvRule) },
-    { NRL_RULES_E,      sizeof(NRL_RULES_E) / sizeof(TtvRule) },
-    { NRL_RULES_F,      sizeof(NRL_RULES_F) / sizeof(TtvRule) },
-    { NRL_RULES_G,      sizeof(NRL_RULES_G) / sizeof(TtvRule) },
-    { NRL_RULES_H,      sizeof(NRL_RULES_H) / sizeof(TtvRule) },
-    { NRL_RULES_I,      sizeof(NRL_RULES_I) / sizeof(TtvRule) },
-    { NRL_RULES_J,      sizeof(NRL_RULES_J) / sizeof(TtvRule) },
-    { NRL_RULES_K,      sizeof(NRL_RULES_K) / sizeof(TtvRule) },
-    { NRL_RULES_L,      sizeof(NRL_RULES_L) / sizeof(TtvRule) },
-    { NRL_RULES_M,      sizeof(NRL_RULES_M) / sizeof(TtvRule) },
-    { NRL_RULES_N,      sizeof(NRL_RULES_N) / sizeof(TtvRule) },
-    { NRL_RULES_O,      sizeof(NRL_RULES_O) / sizeof(TtvRule) },
-    { NRL_RULES_P,      sizeof(NRL_RULES_P) / sizeof(TtvRule) },
-    { NRL_RULES_Q,      sizeof(NRL_RULES_Q) / sizeof(TtvRule) },
-    { NRL_RULES_R,      sizeof(NRL_RULES_R) / sizeof(TtvRule) },
-    { NRL_RULES_S,      sizeof(NRL_RULES_S) / sizeof(TtvRule) },
-    { NRL_RULES_T,      sizeof(NRL_RULES_T) / sizeof(TtvRule) },
-    { NRL_RULES_U,      sizeof(NRL_RULES_U) / sizeof(TtvRule) },
-    { NRL_RULES_V,      sizeof(NRL_RULES_V) / sizeof(TtvRule) },
-    { NRL_RULES_W,      sizeof(NRL_RULES_W) / sizeof(TtvRule) },
-    { NRL_RULES_X,      sizeof(NRL_RULES_X) / sizeof(TtvRule) },
-    { NRL_RULES_Y,      sizeof(NRL_RULES_Y) / sizeof(TtvRule) },
-    { NRL_RULES_Z,      sizeof(NRL_RULES_Z) / sizeof(TtvRule) },
+const ttv_rule_group TTV_NRL_RULES[27] = {
+    { NRL_RULES_PUNCT,  sizeof(NRL_RULES_PUNCT) / sizeof(ttv_rule) },
+    { NRL_RULES_A,      sizeof(NRL_RULES_A) / sizeof(ttv_rule) },
+    { NRL_RULES_B,      sizeof(NRL_RULES_B) / sizeof(ttv_rule) },
+    { NRL_RULES_C,      sizeof(NRL_RULES_C) / sizeof(ttv_rule) },
+    { NRL_RULES_D,      sizeof(NRL_RULES_D) / sizeof(ttv_rule) },
+    { NRL_RULES_E,      sizeof(NRL_RULES_E) / sizeof(ttv_rule) },
+    { NRL_RULES_F,      sizeof(NRL_RULES_F) / sizeof(ttv_rule) },
+    { NRL_RULES_G,      sizeof(NRL_RULES_G) / sizeof(ttv_rule) },
+    { NRL_RULES_H,      sizeof(NRL_RULES_H) / sizeof(ttv_rule) },
+    { NRL_RULES_I,      sizeof(NRL_RULES_I) / sizeof(ttv_rule) },
+    { NRL_RULES_J,      sizeof(NRL_RULES_J) / sizeof(ttv_rule) },
+    { NRL_RULES_K,      sizeof(NRL_RULES_K) / sizeof(ttv_rule) },
+    { NRL_RULES_L,      sizeof(NRL_RULES_L) / sizeof(ttv_rule) },
+    { NRL_RULES_M,      sizeof(NRL_RULES_M) / sizeof(ttv_rule) },
+    { NRL_RULES_N,      sizeof(NRL_RULES_N) / sizeof(ttv_rule) },
+    { NRL_RULES_O,      sizeof(NRL_RULES_O) / sizeof(ttv_rule) },
+    { NRL_RULES_P,      sizeof(NRL_RULES_P) / sizeof(ttv_rule) },
+    { NRL_RULES_Q,      sizeof(NRL_RULES_Q) / sizeof(ttv_rule) },
+    { NRL_RULES_R,      sizeof(NRL_RULES_R) / sizeof(ttv_rule) },
+    { NRL_RULES_S,      sizeof(NRL_RULES_S) / sizeof(ttv_rule) },
+    { NRL_RULES_T,      sizeof(NRL_RULES_T) / sizeof(ttv_rule) },
+    { NRL_RULES_U,      sizeof(NRL_RULES_U) / sizeof(ttv_rule) },
+    { NRL_RULES_V,      sizeof(NRL_RULES_V) / sizeof(ttv_rule) },
+    { NRL_RULES_W,      sizeof(NRL_RULES_W) / sizeof(ttv_rule) },
+    { NRL_RULES_X,      sizeof(NRL_RULES_X) / sizeof(ttv_rule) },
+    { NRL_RULES_Y,      sizeof(NRL_RULES_Y) / sizeof(ttv_rule) },
+    { NRL_RULES_Z,      sizeof(NRL_RULES_Z) / sizeof(ttv_rule) },
 };
 
 // ARPABET -> SC-01 phone names, first match wins.  `left`/`right` are the
 // adjacent ARPABET symbols; an empty string means "any".  `out` is a
-// space-separated list of SC-01 phone names (see PHONE_NAMES).
+// space-separated list of SC-01 phone names (see TTV_PHONE_NAMES).
 //
 // A1/A2 note: the driver these strings were recovered from carries a phone
 // name table with A1 and A2 transposed, so its own lookup resolved the "A1"
@@ -537,14 +529,8 @@ static const TtvRuleGroup NRL_RULES[27] = {
 // transcription slip and this map is the older, datasheet-named data.  The
 // stake is small either way -- a 103 ms vs 71 ms variant of the same vowel, in
 // the one context of EY after /l/.
-struct ArpaMap {
-    const char *left;
-    const char *arpa;
-    const char *right;
-    const char *out;
-};
 
-static const ArpaMap ARPABET_TO_SC01[] = {
+const ttv_arpa_map TTV_ARPABET[] = {
     { "",     "IY",  "",     "E" },
     { "",     "IH",  "",     "I" },
     { "L",    "EY",  "R",    "UH3 A1 I3" },
@@ -631,7 +617,7 @@ static const ArpaMap ARPABET_TO_SC01[] = {
 // Words the rules get wrong, rewritten before the rules run.  Each pair is
 // {as written, as respelled}; the text is space-padded so the leading and
 // trailing blanks act as word boundaries.
-static const char *const NRL_EXCEPTIONS[][2] = {
+const char *const TTV_EXCEPTIONS[][2] = {
     { " SEARCH ",      " SURCH " },
     { " SEARCHES ",    " SURCHES " },
     { " SEARCHED ",    " SURCHED " },
@@ -652,8 +638,8 @@ static const char *const NRL_EXCEPTIONS[][2] = {
 };
 
 // Number names, as ARPABET.  [0..19] are zero..nineteen and [20..27] are
-// twenty, thirty .. ninety; ORDINALS has the same shape.
-static const char *const CARDINALS[28] = {
+// twenty, thirty .. ninety; TTV_ORDINALS has the same shape.
+const char *const TTV_CARDINALS[28] = {
     "zIHrOW", "wAHn", "tUW", "THrIY",
     "fOWr", "fAYv", "sIHks", "sEHvAXn",
     "EYt", "nAYn", "tEHn", "IYlEHvAXn",
@@ -663,7 +649,7 @@ static const char *const CARDINALS[28] = {
     "sIHkstIY", "sEHvEHntIY", "EYtIY", "nAYntIY",
 };
 
-static const char *const ORDINALS[28] = {
+const char *const TTV_ORDINALS[28] = {
     "zIHrOWEHTH", "fERst", "sEHkAHnd", "THERd",
     "fOWrTH", "fIHfTH", "sIHksTH", "sEHvEHnTH",
     "EYtTH", "nAYnTH", "tEHnTH", "IYlEHvEHnTH",
@@ -675,7 +661,7 @@ static const char *const ORDINALS[28] = {
 
 // Spoken names for the 128 ASCII codes, as ARPABET -- what a screen reader
 // says for a lone character.  Index by the character's own code.
-static const char *const ASCII_NAMES[128] = {
+const char *const TTV_ASCII_NAMES[128] = {
     /*   0 */ "nUWl",                        /*   1 */ "stAArt AXv hEHdER",
     /*   2 */ "stAArt AXv tEHkst",           /*   3 */ "EHnd AXv tEHkst",
     /*   4 */ "EHnd AXv trAEnsmIHSHAXn",     /*   5 */ "EHnkwAYr",
@@ -746,7 +732,7 @@ static const char *const ASCII_NAMES[128] = {
 // space-padded text.  Short, and the same three every Votrax-era front end
 // carried.  " PHD " was also recognised but has no expansion -- it was spelled
 // out letter by letter, which is still the right answer.
-static const char *const ABBREVIATIONS[][2] = {
+const char *const TTV_ABBREVIATIONS[][2] = {
     { " DR ",   " DOCTOR " },
     { " MR ",   " MISTER " },
     { " MRS ",  " MISSUS " },
@@ -755,17 +741,17 @@ static const char *const ABBREVIATIONS[][2] = {
 // Words for reading amounts and decimals, as ARPABET.  A currency reader wants
 // all six: "$4.20" is DOLLARS[0] .. POINT .. or "four dollars and twenty
 // cents" depending on how chatty the caller wants to be.
-static const char *const POINT = "pOYnt";
-static const char *const DOLLAR = "dAAlER";
-static const char *const DOLLARS = "dAAlAArz";
-static const char *const AND = "AAnd";
-static const char *const CENT = "sEHnt";
-static const char *const CENTS = "sEHnts";
+const char *const TTV_POINT = "pOYnt";
+const char *const TTV_DOLLAR = "dAAlER";
+const char *const TTV_DOLLARS = "dAAlAArz";
+const char *const TTV_AND = "AAnd";
+const char *const TTV_CENT = "sEHnt";
+const char *const TTV_CENTS = "sEHnts";
 
 // The 64 SC-01 phone names, indexed by phone code.  Datasheet chart order;
 // note 0x05 = A2 and 0x06 = A1.  sc01.dll has those two swapped, which the
 // ROM's own duration fields disprove -- see docs/tech-overview.md, Part 4.
-static const char *const PHONE_NAMES[64] = {
+const char *const TTV_PHONE_NAMES[64] = {
     "EH3",   "EH2",   "EH1",   "PA0",   "DT",    "A2",    "A1",    "ZH",   
     "AH2",   "I3",    "I2",    "I1",    "M",     "N",     "B",     "V",    
     "CH",    "SH",    "Z",     "AW1",   "NG",    "AH1",   "OO1",   "OO",   
@@ -775,3 +761,16 @@ static const char *const PHONE_NAMES[64] = {
     "AW2",   "UH2",   "UH1",   "UH",    "O2",    "O1",    "IU",    "U1",   
     "THV",   "TH",    "ER",    "EH",    "E1",    "AW",    "PA1",   "STOP", 
 };
+
+/* Counts for the tables whose length the matcher needs and C will not tell
+ * it.  Defined here rather than in the header so that adding a row to a table
+ * cannot leave a stale count behind in a different file. */
+const size_t TTV_ARPABET_COUNT = sizeof TTV_ARPABET / sizeof TTV_ARPABET[0];
+const size_t TTV_EXCEPTION_COUNT = sizeof TTV_EXCEPTIONS / sizeof TTV_EXCEPTIONS[0];
+const size_t TTV_ABBREVIATION_COUNT =
+    sizeof TTV_ABBREVIATIONS / sizeof TTV_ABBREVIATIONS[0];
+
+const char *ttv_phone_name(int code)
+{
+    return (code >= 0 && code < 64) ? TTV_PHONE_NAMES[code] : 0;
+}

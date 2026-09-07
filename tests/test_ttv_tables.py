@@ -1,9 +1,10 @@
-"""Structural checks on the generated letter-to-sound tables.
+"""Structural checks on the letter-to-sound tables.
 
-csrc/ttv_tables.h is data, not code, and nothing else in the tree reads it yet
-— so these tests are what keep it honest. The important one is
-`test_outputs_are_real_phone_names`: it proves every SC-01 phone the ARPABET
-map can emit actually exists on the chip.
+src/ttv_tables.c is data, not code, so a wrong row there is not a compile
+error and not a crash — it is one word coming out mispronounced, which nothing
+else would catch. These tests read the source and check its shape. The
+important one is `test_outputs_are_real_phone_names`: it proves every SC-01
+phone the ARPABET map can emit actually exists on the chip.
 """
 
 import re
@@ -13,12 +14,12 @@ import pytest
 
 from pyvotrax.phonemes import PHONE_TABLE
 
-HEADER = Path(__file__).resolve().parent.parent / "csrc" / "ttv_tables.h"
+TABLES = Path(__file__).resolve().parent.parent / "src" / "ttv_tables.c"
 
 
 def _quoted_rows(table_name: str, columns: int) -> list[tuple[str, ...]]:
-    """Pull the `{ "a", "b", ... }` rows out of one table in the header."""
-    text = HEADER.read_text(encoding="utf-8")
+    """Pull the `{ "a", "b", ... }` rows out of one table in the source."""
+    text = TABLES.read_text(encoding="utf-8")
     start = text.index(table_name + "[")
     start = text.index("{", start)
     depth, end = 0, start
@@ -41,22 +42,22 @@ def _quoted_rows(table_name: str, columns: int) -> list[tuple[str, ...]]:
 
 @pytest.fixture(scope="module")
 def arpa_map():
-    return _quoted_rows("ARPABET_TO_SC01", 4)
+    return _quoted_rows("TTV_ARPABET", 4)
 
 
 class TestTableSizes:
-    def test_header_exists(self):
-        assert HEADER.is_file()
+    def test_tables_exist(self):
+        assert TABLES.is_file()
 
     def test_rule_group_count(self):
-        text = HEADER.read_text(encoding="utf-8")
-        assert "static const TtvRuleGroup NRL_RULES[27]" in text
+        text = TABLES.read_text(encoding="utf-8")
+        assert "const ttv_rule_group TTV_NRL_RULES[27]" in text
         # punctuation plus one group per letter
-        names = re.findall(r"static const TtvRule NRL_RULES_(\w+)\[\]", text)
+        names = re.findall(r"static const ttv_rule NRL_RULES_(\w+)\[\]", text)
         assert names == ["PUNCT"] + [chr(ord("A") + i) for i in range(26)]
 
     def test_total_rule_count(self):
-        text = HEADER.read_text(encoding="utf-8")
+        text = TABLES.read_text(encoding="utf-8")
         total = sum(len(_quoted_rows("NRL_RULES_" + n, 4))
                     for n in ["PUNCT"] + [chr(ord("A") + i) for i in range(26)])
         assert total == 355
@@ -66,9 +67,9 @@ class TestTableSizes:
         assert len(arpa_map) == 81
 
     def test_ascii_and_number_tables(self):
-        assert len(_quoted_rows("NRL_EXCEPTIONS", 2)) == 17
-        text = HEADER.read_text(encoding="utf-8")
-        assert len(re.findall(r'"[^"]*"', text.split("ASCII_NAMES[128]")[1]
+        assert len(_quoted_rows("TTV_EXCEPTIONS", 2)) == 17
+        text = TABLES.read_text(encoding="utf-8")
+        assert len(re.findall(r'"[^"]*"', text.split("TTV_ASCII_NAMES[128]")[1]
                               .split("};")[0])) == 128
 
 
