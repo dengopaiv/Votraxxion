@@ -5,11 +5,11 @@
 // silicon's ROM is immutable, so the tables below ARE the chip.
 //
 // Provenance: the SC-01-A words were transcribed from the die by Olivier
-// Galibert (see rom.cc); they have since been verified byte-for-byte against
+// Galibert (see reference/gate-sim/rom.cc); they have since been verified byte-for-byte against
 // the dumped 512-byte mask ROM (CRC32 fc416227, SHA1 1d6da90b1807a01b5e186ef
 // 08476119a862b5e6d).  The 1980 SC-01 deltas below come from that mask's dump
 // (CRC32 528d1c57, SHA1 268b5884dce04e49e2376df3e2dc82e852b708c1).
-// See "Tech overview.md", Part 1, "The two mask revisions".
+// See docs/tech-overview.md, Part 1, "The two mask revisions".
 #pragma once
 
 #include <cstdint>
@@ -35,7 +35,7 @@ struct PhonemeParams {
 // hardware carries.
 enum class MaskRevision { SC01A = 0, SC01 = 1 };
 
-// Raw ROM data: rom[64][2] from rom.cc — the SC-01-A mask.
+// Raw ROM data: rom[64][2] from reference/gate-sim/rom.cc — the SC-01-A mask.
 static constexpr uint32_t RAW_ROM_W0[64] = {
     0x361, 0x161, 0x9A1, 0x0E0, 0x0FB, 0x161, 0x7A1, 0x463,
     0x161, 0xB61, 0xA61, 0x9A1, 0x7A3, 0xA61, 0x173, 0x163,

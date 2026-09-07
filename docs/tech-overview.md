@@ -694,7 +694,7 @@ the front end cheats, respelling the word into something the rules do handle.
 | `csrc/ttv.h` | The matcher that walks them — text to phone codes |
 | `csrc/votrax_capi.h`, `csrc/votrax_capi.cpp` | The flat `extern "C"` layer |
 | `csrc/bindings.cpp` | The pybind11 layer, for the workbench and the tests |
-| `nvda-addon-native/` | The add-on: a ctypes shim and a packaging script |
+| `nvda-addon/` | The add-on: a ctypes shim and a packaging script |
 
 Everything but the two `.cpp` files is header-only, so the synthesizer can be
 dropped into another project by adding `csrc/` to the include path.
@@ -834,13 +834,13 @@ express, and attempting more without stress information would be guesswork.
 
 ### The NVDA add-on
 
-`nvda-addon-native/` builds the whole thing into an add-on that is **169 KB**:
+`nvda-addon/` builds the whole thing into an add-on that is **169 KB**:
 one Python file and one DLL per architecture. The previous Python-based add-on
 bundled numpy, scipy and a pronunciation dictionary to do the same job, at
 roughly 40 MB.
 
 ```
-nvda-addon-native/
+nvda-addon/
   manifest.ini
   addon/synthDrivers/votraxsc01.py     the shim
   package.py                           builds both DLLs, zips the add-on

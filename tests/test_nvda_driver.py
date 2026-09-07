@@ -6,7 +6,7 @@ needs NVDA to run — only the handful of modules it imports — so stubbing the
 lets the parts most likely to be wrong be tested here rather than discovered
 inside a screen reader.
 
-Skipped unless the DLL has been built (nvda-addon-native/package.py).
+Skipped unless the DLL has been built (nvda-addon/package.py).
 """
 
 import ctypes
@@ -21,13 +21,13 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-DRIVER = ROOT / "nvda-addon-native" / "addon" / "synthDrivers" / "votraxsc01.py"
+DRIVER = ROOT / "nvda-addon" / "addon" / "synthDrivers" / "votraxsc01.py"
 DLL = DRIVER.parent / ("votraxsc01-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8
                        else "votraxsc01-x86.dll")
 
 pytestmark = pytest.mark.skipif(
     not DLL.is_file(),
-    reason=f"{DLL.name} not built - run nvda-addon-native/package.py",
+    reason=f"{DLL.name} not built - run nvda-addon/package.py",
 )
 
 

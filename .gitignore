@@ -1,30 +1,32 @@
-vsim
-*.o
-*~
-pyvotrax.egg-info/
-__pycache__/
-*.pyc
-.pytest_cache/
-
-# Build artifacts
+# Build outputs
 build/
 dist/
+*.o
+*.obj
 *.pyd
+*.dll
+*.so
+*.lib
+*.exp
+vsim
 
-# Temp / generated files
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Audio scratch
 *.wav
-=1.0
 
 # Local tooling
 .claude/
 
-# MAME reference (not our code)
-mame_votrax.cpp
-
-# NVDA addon build outputs & vendored deps
+# NVDA add-on build outputs (built by nvda-addon/package.py)
 *.nvda-addon
-nvda-addon/lib/
+nvda-addon/addon/synthDrivers/*.dll
 
-# Native addon build outputs (built by nvda-addon-native/package.py)
-nvda-addon-native/build/
-nvda-addon-native/addon/synthDrivers/*.dll
+# Golden fingerprints are captured on demand, not committed -- see
+# tools/goldens.py.  The one exception is the checked-in reference under
+# tests/data/, which is committed deliberately.
+/goldens/

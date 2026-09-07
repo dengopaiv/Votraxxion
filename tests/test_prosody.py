@@ -7,7 +7,7 @@ shapes down and, more importantly, pin down the invariants — that levels stay
 in range, that packing is reversible, and that a contour never leaks across a
 sentence boundary.
 
-Skipped unless the DLL has been built (nvda-addon-native/package.py).
+Skipped unless the DLL has been built (nvda-addon/package.py).
 """
 
 import ctypes
@@ -16,13 +16,13 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-DLL = ROOT / "nvda-addon-native" / "addon" / "synthDrivers" / (
+DLL = ROOT / "nvda-addon" / "addon" / "synthDrivers" / (
     "votraxsc01-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8
     else "votraxsc01-x86.dll")
 
 pytestmark = pytest.mark.skipif(
     not DLL.is_file(),
-    reason=f"{DLL.name} not built - run nvda-addon-native/package.py",
+    reason=f"{DLL.name} not built - run nvda-addon/package.py",
 )
 
 NEUTRAL = 1          # VX_NEUTRAL_INFLECTION

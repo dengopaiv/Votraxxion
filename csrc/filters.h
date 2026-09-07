@@ -100,7 +100,7 @@ inline void build_noise_shaper_filter(double* a, double* b,
 // Build the final output lowpass filter (FX).
 // Per MAME: the on-die capacitor values give a cutoff ~150 Hz, but actual chip
 // recordings are ~4 kHz — so we fuzz by that ratio. 4 kHz is the authentic
-// bandwidth (see Tech overview.md Part 3). `fx_fudge` defaults to 150/4000
+// bandwidth (see docs/tech-overview.md Part 3). `fx_fudge` defaults to 150/4000
 // (matches MAME); passing 1.0 would restore the "as-schematic" 150 Hz behavior.
 inline void build_lowpass_filter(double* a, double* b,
                                   double sclock, double cclock,

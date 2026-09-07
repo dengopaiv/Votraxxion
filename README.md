@@ -6,7 +6,7 @@ as a Windows music-production workbench and an NVDA addon.
 The DSP core is hand-built from the schematics extracted from die photographs,
 published at [og.kervella.org/sc01a](http://og.kervella.org/sc01a). The C++
 port tracks [MAME's votrax.cpp](https://github.com/mamedev/mame/blob/master/src/devices/sound/votrax.cpp).
-For deeper background, see `Tech overview.md`.
+For deeper background, see `docs/tech-overview.md`.
 
 ## Running from source
 
@@ -97,7 +97,7 @@ beyond your own machine.
 The synthesizer proper is C++ and has no dependencies — not on Python, not on
 a phoneme dictionary, not on a ROM file. Both SC-01 mask ROMs and the whole
 English front end are compiled in, so the result is one library and nothing
-beside it. `csrc/votrax_capi.h` is the C API; `Tech overview.md`, Part 4, has
+beside it. `csrc/votrax_capi.h` is the C API; `docs/tech-overview.md`, Part 4, has
 the details.
 
 Windows, MSVC (from a Developer Command Prompt):
@@ -139,7 +139,7 @@ The native add-on is one Python file and one DLL per architecture — about
 ROM files:
 
 ```
-cd nvda-addon-native
+cd nvda-addon
 python package.py
 ```
 

@@ -40,7 +40,7 @@
 // (sc01.dll, 2026) and cross-checked against the published NRL ruleset.  The
 // NRL rules are a US Government work; Wasser's arrangement was placed in the
 // public domain.  Kept here as source so the synthesizer needs no dictionary,
-// no data file and no runtime download -- see "Tech overview.md", Part 4.
+// no data file and no runtime download -- see docs/tech-overview.md, Part 4.
 #pragma once
 
 #include <cstddef>
@@ -764,7 +764,7 @@ static const char *const CENTS = "sEHnts";
 
 // The 64 SC-01 phone names, indexed by phone code.  Datasheet chart order;
 // note 0x05 = A2 and 0x06 = A1.  sc01.dll has those two swapped, which the
-// ROM's own duration fields disprove -- see "Tech overview.md", Part 4.
+// ROM's own duration fields disprove -- see docs/tech-overview.md, Part 4.
 static const char *const PHONE_NAMES[64] = {
     "EH3",   "EH2",   "EH1",   "PA0",   "DT",    "A2",    "A1",    "ZH",   
     "AH2",   "I3",    "I2",    "I1",    "M",     "N",     "B",     "V",    

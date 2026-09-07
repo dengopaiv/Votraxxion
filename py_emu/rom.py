@@ -1,9 +1,9 @@
 """Votrax SC-01 / SC-01-A internal mask ROM data and parameter extraction.
 
-Raw ROM data from rom.cc, with bit extraction matching the original logic.
+Raw ROM data from reference/gate-sim/rom.cc, with bit extraction matching the original logic.
 The SC-01-A words have been verified byte-for-byte against the dumped 512-byte
 mask ROM (CRC32 fc416227); the 1980 SC-01 deltas come from that mask's own dump
-(CRC32 528d1c57). This mirrors csrc/rom_data.h — see "Tech overview.md",
+(CRC32 528d1c57). This mirrors csrc/rom_data.h — see docs/tech-overview.md,
 Part 1, "The two mask revisions".
 """
 
@@ -17,7 +17,7 @@ class MaskRevision(IntEnum):
     SC01A = 0   # the later revision, on most surviving hardware
     SC01 = 1    # the 1980 part
 
-# Raw ROM data: rom[64][2] from rom.cc
+# Raw ROM data: rom[64][2] from reference/gate-sim/rom.cc
 _RAW_ROM = [
     (0x361, 0x74688127),
     (0x161, 0xD4688127),

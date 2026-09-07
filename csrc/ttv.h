@@ -10,7 +10,7 @@
 // — an NVDA add-on gets a native library it can drive over a few C calls, with
 // no Python and no data files to install alongside it.
 //
-// See "Tech overview.md", Part 4, for the rule format and the table
+// See docs/tech-overview.md, Part 4, for the rule format and the table
 // provenance.
 #pragma once
 
