@@ -13,7 +13,7 @@ capacitor filters whose coefficients are rebuilt from the chip's own
 interpolating parameter registers, sample by sample. Both mask ROMs and an
 English letter-to-sound front end are compiled in, so the whole thing is one
 library file with no data files beside it and no Python underneath it. That is
-what lets the NVDA add-on be 169 KB.
+what lets the NVDA add-on be 142 KB.
 
 ## The parts
 
@@ -36,13 +36,13 @@ what lets the NVDA add-on be 169 KB.
 
 | Path | What it is | Depends on |
 |---|---|---|
-| `src/` | **The synthesizer.** C11, no libc beyond `string.h`/`math.h`, no allocation in the audio path. This is the deliverable. | nothing |
+| `src/` | **The synthesizer.** C11. The only libc it uses is `string.h`, `math.h` and one `calloc`/`free` pair for the chip handle; nothing allocates once audio is running. This is the deliverable. | nothing |
 | `nvda-addon/` | The NVDA screen-reader driver: one Python shim over `src/` via ctypes, plus a packager that builds x64 and x86 libraries and zips a `.nvda-addon`. | `src/` |
 | `csrc/` | pybind11 bindings exposing the chip core to Python as `pyvotrax._votrax_core`. | `src/`, pybind11 |
 | `pyvotrax/` | The Workbench: a wxPython GUI, a TTS pipeline over CMUdict, preset handling. A music-production tool, not the screen-reader path. | `csrc/`, numpy, scipy, wx |
 | `py_emu/` | The same DSP again, in pure Python, plus experimental "enhanced" modes (LF glottal, nasal anti-resonators) that the C core does not have. | numpy |
-| `tests/` | 500 tests. Some drive Python, some load the built DLL through ctypes and skip if it is not built. | both |
-| `tools/goldens.py` | Fingerprints a library's entire observable output so two implementations can be diffed sample-for-sample. | a built library |
+| `tests/` | 552 tests. Some drive Python, some load the built DLL through ctypes and skip if it is not built. | both |
+| `tools/goldens.py` | Fingerprints a library's entire observable output so two implementations can be diffed sample-for-sample. Its committed output is `tests/data/golden.json`. | a built library |
 | `reference/` | Galibert's gate-level simulator and MAME's `votrax.cpp`. Provenance, not code we build. | nothing |
 | `packaging/`, `presets/` | PyInstaller spec, Inno Setup script and factory presets for the Workbench. | `pyvotrax/` |
 

@@ -213,3 +213,8 @@ inflection and the live switch. So the fingerprint's floor is the int16 grid,
 which is the right floor: it catches everything that can reach a listener.
 
 515 tests pass (500 existing, 15 new).
+
+A second new file, `tests/test_c_api.py`, covers what the differential test
+could not: the C++ had no limits, so truncation, queue overflow, clamping and
+NULL handling are all new behaviour with nothing to diff against. 37 tests,
+552 in total.
