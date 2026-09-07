@@ -20,14 +20,34 @@ public:
     // `closure_strength` scales how deeply plosive closures attenuate the output.
     // 1.0 (default) reproduces MAME's curve; 0.0 disables the closure dip so
     // plosives lose their punch; values >1.0 exaggerate the closure effect.
+    // `articulation_rate` scales the formant-interpolator decay speed.
+    // 1.0 = SC-01 native behaviour (implicit 1/8 decay per tick). Higher
+    // values → faster transitions between phoneme targets, matching
+    // SSI-263's articulation register (T2..T0, 0..7) which SC-01 lacks.
+    // Typical SSI-263 default is ~1.4 (register value 5 of 7).
+    //
+    // `voice_closure_ratio` (0..1) controls how much of the closure
+    // dip applies to the voiced-formant path. 1.0 = SC-01 native
+    // (closure mutes the mixed output — correct for voiceless stops
+    // but silences voiced stops /b/ /d/ /g/ which should still have
+    // buzz during closure). 0.0 = voice completely unaffected by
+    // closure (lets voicing continue through voiced stops). Noise
+    // path always gets full closure dip regardless.
     explicit VotraxSC01ACore(double master_clock = DEFAULT_MASTER_CLOCK,
                              double fx_fudge = 150.0 / 4000.0,
-                             double closure_strength = 1.0)
+                             double closure_strength = 1.0,
+                             double articulation_rate = 1.0,
+                             double voice_closure_ratio = 1.0,
+                             MaskRevision mask = MaskRevision::SC01A)
         : m_master_clock(master_clock),
           m_sclock(sclock_from_master(master_clock)),
           m_cclock(cclock_from_master(master_clock)),
           m_fx_fudge(fx_fudge),
-          m_closure_strength(closure_strength)
+          m_closure_strength(closure_strength),
+          m_articulation_rate(articulation_rate),
+          m_voice_closure_ratio(voice_closure_ratio),
+          m_mask(mask),
+          m_rom_table(&rom_table(mask))
     {
         reset();
     }
@@ -37,11 +57,24 @@ public:
     double cclock() const { return m_cclock; }
     double fx_fudge() const { return m_fx_fudge; }
     double closure_strength() const { return m_closure_strength; }
+    double articulation_rate() const { return m_articulation_rate; }
+    void set_articulation_rate(double rate) { m_articulation_rate = rate; }
+    double voice_closure_ratio() const { return m_voice_closure_ratio; }
+    void set_voice_closure_ratio(double r) { m_voice_closure_ratio = r; }
+
+    // Which silicon revision's phoneme ROM is speaking.  Switching re-points
+    // the table; the phone currently being voiced keeps the parameters it was
+    // committed with, so a change takes effect from the next phone_commit().
+    MaskRevision mask() const { return m_mask; }
+    void set_mask(MaskRevision mask) {
+        m_mask = mask;
+        m_rom_table = &rom_table(mask);
+    }
 
     void reset() {
         m_phone = 0x3F;  // STOP
         m_inflection = 0;
-        m_rom = ROM_DATA[0x3F];
+        m_rom = (*m_rom_table)[0x3F];
 
         // Interpolation registers
         m_cur_fa = m_cur_fc = m_cur_va = 0;
@@ -87,7 +120,7 @@ public:
     void phone_commit(int phone, int inflection = 0) {
         m_phone = phone & 0x3F;
         m_inflection = inflection & 0x03;
-        m_rom = ROM_DATA[m_phone];
+        m_rom = (*m_rom_table)[m_phone];
         m_phonetick = 0;
         m_ticks = 0;
         if (m_rom.cld == 0)
@@ -110,8 +143,8 @@ public:
 
     // Read-only accessor: get the ROM-decoded parameters for a given phoneme
     // code. Useful for UIs that want to show "defaults" alongside user overrides.
-    static PhonemeParams rom_params(int phone) {
-        return ROM_DATA[phone & 0x3F];
+    static PhonemeParams rom_params(int phone, MaskRevision mask = MaskRevision::SC01A) {
+        return rom_table(mask)[phone & 0x3F];
     }
 
     double generate_one_sample() {
@@ -125,6 +158,23 @@ public:
         return m_ticks >= 0x10;
     }
 
+    // How long a phone runs, in samples, if left alone.
+    //
+    // The duration counter is exact and closed-form: a phone lasts 16 ticks,
+    // a tick is (4 * duration + 1) chip updates, and a chip update is two
+    // samples.  Verified against all 64 phones on both masks.  `duration`
+    // lives in word0, which is identical between the two mask revisions, so
+    // this does not vary with the mask.
+    //
+    // This is what makes constant-pitch rate control possible without a
+    // measurement pass at startup: to speak faster, hold each phone for
+    // phone_samples()/speed samples and commit the next one early.  The
+    // glottal oscillator is driven by the master clock and never sees any of
+    // this, so tempo moves and pitch does not.
+    int phone_samples(int phone) const {
+        return 32 * (4 * (*m_rom_table)[phone & 0x3F].duration + 1);
+    }
+
 private:
     // --- Clock and tunable-curve configuration (set at construction) ---
     double m_master_clock;
@@ -132,6 +182,10 @@ private:
     double m_cclock;
     double m_fx_fudge;
     double m_closure_strength;
+    double m_articulation_rate;
+    double m_voice_closure_ratio;
+    MaskRevision m_mask;
+    const std::array<PhonemeParams, 64> *m_rom_table;
 
     // --- State ---
     int m_phone;
@@ -211,7 +265,24 @@ private:
     }
 
     void interpolate(int& reg, int target) {
-        reg = (reg - (reg >> 3) + (target << 1)) & 0xFF;
+        if (m_articulation_rate == 1.0) {
+            // Fast path: SC-01 native fixed-point interpolator.
+            reg = (reg - (reg >> 3) + (target << 1)) & 0xFF;
+        } else {
+            // Rate-scaled first-order interpolator. At rate=1 matches the
+            // SC-01 behaviour above: next = reg*7/8 + 2*target, whose steady
+            // state is 16*target (register in 8-bit space).
+            // Generalised form: next = reg + alpha*(16*target - reg),
+            // alpha = 0.125 * articulation_rate.
+            double alpha = 0.125 * m_articulation_rate;
+            if (alpha > 1.0) alpha = 1.0;
+            if (alpha < 0.0) alpha = 0.0;
+            double steady = 16.0 * (double)target;
+            double next = (double)reg + alpha * (steady - (double)reg);
+            if (next < 0.0) next = 0.0;
+            if (next > 255.0) next = 255.0;
+            reg = (int)next & 0xFF;
+        }
     }
 
     void interpolate_formants() {
@@ -284,8 +355,23 @@ private:
         int glot_idx = m_pitch >> 3;
         double glottal = (glot_idx < 9) ? GLOTTAL[glot_idx] : 0.0;
 
+        // Closure attenuation curves. When voice_closure_ratio == 1.0
+        // (default) we use the original SC-01 signal path where
+        // closure is applied once, at the final output. When it's
+        // less than 1.0, closure is applied separately to voice and
+        // noise inputs so the voiced path can survive the dip — this
+        // diverges from SC-01 hardware behaviour intentionally, to
+        // emulate SSI-263's ability to keep voiced stops audible.
+        double mame_atten = (7 ^ (m_closure >> 2)) / 7.0;
+        double noise_closure_atten = 1.0 - m_closure_strength * (1.0 - mame_atten);
+        double voice_closure_atten = 1.0 - m_voice_closure_ratio * m_closure_strength * (1.0 - mame_atten);
+        bool selective = (m_voice_closure_ratio < 1.0);
+
         // Voice path: glottal * va/15 -> F1 -> F2v
+        // Under selective mode, attenuate at the input so the voice path
+        // through F1/F2v sees the closure dip before joining noise.
         double voice = glottal * (m_filt_va / 15.0);
+        if (selective) voice *= voice_closure_atten;
 
         shift_hist<4>(voice, m_f1_xh);
         double f1_out = apply_filter<4, 4>(m_f1_xh, m_f1_yh, m_f1_a, m_f1_b);
@@ -299,6 +385,7 @@ private:
         bool noise_gate = (m_pitch & 0x40) ? m_cur_noise : false;
         double noise_raw = 1e4 * (noise_gate ? 1.0 : -1.0);
         double noise_in = noise_raw * (m_filt_fa / 15.0);
+        if (selective) noise_in *= noise_closure_atten;
 
         shift_hist<3>(noise_in, m_ns_xh);
         double ns_out = apply_filter<3, 3>(m_ns_xh, m_ns_yh, m_ns_a, m_ns_b);
@@ -323,11 +410,10 @@ private:
         double f4_out = apply_filter<4, 4>(m_f4_xh, m_f4_yh, m_f4_a, m_f4_b);
         shift_hist<3>(f4_out, m_f4_yh);
 
-        // MAME closure curve, scaled by closure_strength: 1.0 = authentic,
-        // 0.0 = no closure dip, >1.0 = exaggerated.
-        double mame_atten = (7 ^ (m_closure >> 2)) / 7.0;
-        double closure_atten = 1.0 - m_closure_strength * (1.0 - mame_atten);
-        double closure_out = f4_out * closure_atten;
+        // In SC-01 native mode, apply closure once at the output
+        // (preserves byte-for-byte identity with original behaviour).
+        // In selective mode, closure already applied at inputs.
+        double closure_out = selective ? f4_out : (f4_out * noise_closure_atten);
 
         shift_hist<2>(closure_out, m_fx_xh);
         double fx_out = apply_filter<2, 2>(m_fx_xh, m_fx_yh, m_fx_a, m_fx_b);

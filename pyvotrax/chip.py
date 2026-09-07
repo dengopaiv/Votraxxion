@@ -1,4 +1,4 @@
-"""Votrax SC-01A chip-level emulation — C++ backend wrapper.
+"""Votrax SC-01 / SC-01-A chip-level emulation — C++ backend wrapper.
 
 Delegates all DSP work to the compiled C++ extension (_votrax_core).
 For the pure-Python implementation, see py_emu.VotraxSC01APython.
@@ -11,6 +11,7 @@ from .constants import MASTER_CLOCK as _DEFAULT_MASTER_CLOCK
 try:
     from ._votrax_core import VotraxSC01ACore as _NativeCore
     from ._votrax_core import PhonemeParams as _NativeParams
+    from ._votrax_core import MaskRevision
 except ImportError:
     raise ImportError(
         "The C++ DSP extension (_votrax_core) is not compiled. "
@@ -25,13 +26,16 @@ PHONEME_PARAM_FIELDS = (
 )
 
 
-def rom_params(phone: int) -> dict:
+def rom_params(phone: int, mask: "MaskRevision" = None) -> dict:
     """Return the ROM-decoded phoneme parameters for ``phone`` (0-63) as a dict.
 
     Keys match :data:`PHONEME_PARAM_FIELDS`. Useful for UIs that need to show
-    defaults next to user overrides.
+    defaults next to user overrides. ``mask`` selects the silicon revision;
+    it defaults to the SC-01-A.
     """
-    p = _NativeCore.rom_params(int(phone) & 0x3F)
+    if mask is None:
+        mask = MaskRevision.SC01A
+    p = _NativeCore.rom_params(int(phone) & 0x3F, mask)
     return {f: getattr(p, f) for f in PHONEME_PARAM_FIELDS}
 
 
@@ -48,6 +52,11 @@ class VotraxSC01A:
         fx_fudge: Final-stage lowpass cutoff scaling. ``150/4000`` (default)
             matches MAME's observed chip behavior (~4 kHz authentic cutoff).
             Pass ``1.0`` for the muffled "as-schematic" 150 Hz behavior.
+        mask: Which silicon revision's phoneme ROM to speak with.
+            ``MaskRevision.SC01A`` (default) is the later part that most
+            surviving hardware carries; ``MaskRevision.SC01`` is the 1980
+            part, whose twelve open vowels run at full voice amplitude and
+            are audibly louder and more strident.
     """
 
     def __init__(
@@ -55,12 +64,16 @@ class VotraxSC01A:
         master_clock: float = _DEFAULT_MASTER_CLOCK,
         fx_fudge: float = 150.0 / 4000.0,
         closure_strength: float = 1.0,
+        mask: "MaskRevision" = None,
     ):
         self._master_clock = float(master_clock)
         self._fx_fudge = float(fx_fudge)
         self._closure_strength = float(closure_strength)
+        if mask is None:
+            mask = MaskRevision.SC01A
         self._native = _NativeCore(
-            self._master_clock, self._fx_fudge, self._closure_strength
+            self._master_clock, self._fx_fudge, self._closure_strength,
+            mask=mask,
         )
 
     @property
@@ -84,6 +97,17 @@ class VotraxSC01A:
     @property
     def closure_strength(self) -> float:
         return self._closure_strength
+
+    @property
+    def mask(self) -> "MaskRevision":
+        """Which mask ROM revision is speaking."""
+        return self._native.mask
+
+    @mask.setter
+    def mask(self, value: "MaskRevision"):
+        # Takes effect from the next phone_commit(); the phone currently
+        # being voiced keeps the parameters it was committed with.
+        self._native.mask = value
 
     def reset(self):
         """Power-on reset: initialize all state to defaults."""
@@ -119,7 +143,7 @@ class VotraxSC01A:
             raise TypeError(
                 f"Unknown PhonemeParams override fields: {sorted(unknown)!r}"
             )
-        base = _NativeCore.rom_params(int(phone) & 0x3F)
+        base = _NativeCore.rom_params(int(phone) & 0x3F, self._native.mask)
         merged = {f: getattr(base, f) for f in PHONEME_PARAM_FIELDS}
         merged.update(overrides)
         params = _NativeParams(**merged)

@@ -1,5 +1,15 @@
-// Votrax SC-01A ROM data — pre-decoded phoneme parameters.
-// Generated from pyvotrax/rom.py RAW_ROM data.
+// Votrax SC-01 / SC-01-A internal mask ROM — pre-decoded phoneme parameters.
+//
+// The SC-01 keeps its 64 phoneme definitions in an on-die mask ROM: 64 rows of
+// a 12-bit word0 and a 32-bit word1.  There is nothing to load at runtime — the
+// silicon's ROM is immutable, so the tables below ARE the chip.
+//
+// Provenance: the SC-01-A words were transcribed from the die by Olivier
+// Galibert (see rom.cc); they have since been verified byte-for-byte against
+// the dumped 512-byte mask ROM (CRC32 fc416227, SHA1 1d6da90b1807a01b5e186ef
+// 08476119a862b5e6d).  The 1980 SC-01 deltas below come from that mask's dump
+// (CRC32 528d1c57, SHA1 268b5884dce04e49e2376df3e2dc82e852b708c1).
+// See "Tech overview.md", Part 1, "The two mask revisions".
 #pragma once
 
 #include <cstdint>
@@ -20,7 +30,12 @@ struct PhonemeParams {
     bool pause;   // true if pause phoneme
 };
 
-// Raw ROM data: rom[64][2] from rom.cc
+// Which mask revision to speak with.  Both are real production silicon; the
+// SC-01 is the 1980 part, the SC-01-A the later revision that most surviving
+// hardware carries.
+enum class MaskRevision { SC01A = 0, SC01 = 1 };
+
+// Raw ROM data: rom[64][2] from rom.cc — the SC-01-A mask.
 static constexpr uint32_t RAW_ROM_W0[64] = {
     0x361, 0x161, 0x9A1, 0x0E0, 0x0FB, 0x161, 0x7A1, 0x463,
     0x161, 0xB61, 0xA61, 0x9A1, 0x7A3, 0xA61, 0x173, 0x163,
@@ -51,6 +66,29 @@ static constexpr uint32_t RAW_ROM_W1[64] = {
     0x9049D326, 0xB06980A3, 0x00A050A4, 0x30A058A4,
 };
 
+// The 1980 SC-01 mask differs from the SC-01-A in exactly twelve rows, and
+// every difference is confined to one field: the voice amplitude (`va`) of the
+// open vowels.  The original ran all twelve at full scale (va = 15); the -A
+// revision pulled them down to 9, 11 or 14.  word0 is identical throughout, so
+// only word1 needs overriding.  Audibly the SC-01 is the louder, more strident
+// voice — roughly +29% RMS and +48% peak on ordinary speech.
+struct MaskDelta { uint8_t phone; uint32_t w1; };
+
+static constexpr MaskDelta SC01_W1_DELTAS[] = {
+    { 0x08, 0xC4E9C1A3 },  // AH2   va 9  -> 15
+    { 0x13, 0x706981A3 },  // AW1   va 11 -> 15
+    { 0x15, 0x84E9C1A3 },  // AH1   va 9  -> 15
+    { 0x23, 0x54C981A3 },  // UH3   va 14 -> 15
+    { 0x24, 0x84E9C1A3 },  // AH    va 9  -> 15
+    { 0x2E, 0x74E881A7 },  // AE    va 11 -> 15
+    { 0x2F, 0x74E881A7 },  // AE1   va 11 -> 15
+    { 0x30, 0x606981A3 },  // AW2   va 11 -> 15
+    { 0x31, 0x54C981A3 },  // UH2   va 14 -> 15
+    { 0x32, 0xE4C981A3 },  // UH1   va 14 -> 15
+    { 0x33, 0xB4C981A3 },  // UH    va 14 -> 15
+    { 0x3D, 0xB06981A3 },  // AW    va 11 -> 15
+};
+
 static inline int extract_param(uint32_t word1, int slot) {
     uint32_t base = word1 >> slot;
     return (((base & 0x000001) ? 8 : 0) |
@@ -68,9 +106,18 @@ static inline int extract_clvd(uint32_t word0, uint32_t word1, int slot) {
             ((base & 0x40) ? 8 : 0));
 }
 
-static inline PhonemeParams decode_phoneme(int index) {
+// word1 for `index` under `rev` — the -A table, with the 1980 overrides applied.
+static inline uint32_t raw_word1(int index, MaskRevision rev) {
+    if (rev == MaskRevision::SC01) {
+        for (const MaskDelta &d : SC01_W1_DELTAS)
+            if (d.phone == index) return d.w1;
+    }
+    return RAW_ROM_W1[index];
+}
+
+static inline PhonemeParams decode_phoneme(int index, MaskRevision rev = MaskRevision::SC01A) {
     uint32_t w0 = RAW_ROM_W0[index];
-    uint32_t w1 = RAW_ROM_W1[index];
+    uint32_t w1 = raw_word1(index, rev);
 
     int duration = (((w0 & 0x020) ? 0x40 : 0) |
                     ((w0 & 0x040) ? 0x20 : 0) |
@@ -97,12 +144,20 @@ static inline PhonemeParams decode_phoneme(int index) {
 }
 
 // Pre-decoded ROM data, initialized at startup
-static inline std::array<PhonemeParams, 64> build_rom_data() {
+static inline std::array<PhonemeParams, 64> build_rom_data(MaskRevision rev) {
     std::array<PhonemeParams, 64> data;
     for (int i = 0; i < 64; i++) {
-        data[i] = decode_phoneme(i);
+        data[i] = decode_phoneme(i, rev);
     }
     return data;
 }
 
-static const std::array<PhonemeParams, 64> ROM_DATA = build_rom_data();
+static const std::array<PhonemeParams, 64> ROM_DATA_SC01A = build_rom_data(MaskRevision::SC01A);
+static const std::array<PhonemeParams, 64> ROM_DATA_SC01  = build_rom_data(MaskRevision::SC01);
+
+static inline const std::array<PhonemeParams, 64> &rom_table(MaskRevision rev) {
+    return rev == MaskRevision::SC01 ? ROM_DATA_SC01 : ROM_DATA_SC01A;
+}
+
+// Back-compatible default: the SC-01-A mask.
+static const std::array<PhonemeParams, 64> &ROM_DATA = ROM_DATA_SC01A;

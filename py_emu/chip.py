@@ -1,4 +1,4 @@
-"""Votrax SC-01A chip-level emulation — pure Python DSP.
+"""Votrax SC-01 / SC-01-A chip-level emulation — pure Python DSP.
 
 Emulates the SC-01A at the DSP level, faithfully reproducing the MAME
 votrax.cpp analog signal path to generate speech waveforms.
@@ -14,7 +14,7 @@ for reference and experimentation. These are NOT part of the real SC-01A.
 
 import numpy as np
 
-from .rom import ROM_DATA
+from .rom import MaskRevision, rom_table
 from .filters import (
     SCLOCK, CCLOCK,
     bits_to_caps, build_standard_filter, build_noise_shaper_filter,
@@ -65,19 +65,35 @@ class VotraxSC01APython:
     Args:
         enhanced: Enable enhanced mode with KLGLOTT88 glottal source,
                   PolyBLEP anti-aliasing, jitter, and shimmer (default False).
+        mask: Which silicon revision's phoneme ROM to speak with. SC01A
+              (default) is the later part; SC01 is the 1980 part, whose open
+              vowels run at full voice amplitude and are audibly louder.
     """
 
-    def __init__(self, enhanced: bool = False, rd: float = 1.0):
+    def __init__(self, enhanced: bool = False, rd: float = 1.0,
+                 mask: MaskRevision = MaskRevision.SC01A):
         self._enhanced = enhanced
         self._rd = rd
+        self._mask = mask
+        self._rom_table = rom_table(mask)
         self.reset()
+
+    @property
+    def mask(self) -> MaskRevision:
+        """Which mask ROM revision is speaking."""
+        return self._mask
+
+    @mask.setter
+    def mask(self, value: MaskRevision):
+        self._mask = MaskRevision(value)
+        self._rom_table = rom_table(self._mask)
 
     def reset(self):
         """Power-on reset: initialize all state to defaults."""
         # Phoneme state
         self._phone = 0x3F  # STOP
         self._inflection = 0
-        self._rom = ROM_DATA[0x3F]
+        self._rom = self._rom_table[0x3F]
 
         # Interpolation registers (8-bit)
         self._cur_fa = 0
@@ -235,7 +251,7 @@ class VotraxSC01APython:
         """
         self._phone = phone & 0x3F
         self._inflection = inflection & 0x03
-        self._rom = ROM_DATA[self._phone]
+        self._rom = self._rom_table[self._phone]
         self._phonetick = 0
         self._ticks = 0
         # closure is set when ticks reaches cld, or immediately if cld==0

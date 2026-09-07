@@ -24,3 +24,7 @@ mame_votrax.cpp
 # NVDA addon build outputs & vendored deps
 *.nvda-addon
 nvda-addon/lib/
+
+# Native addon build outputs (built by nvda-addon-native/package.py)
+nvda-addon-native/build/
+nvda-addon-native/addon/synthDrivers/*.dll

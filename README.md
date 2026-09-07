@@ -92,14 +92,74 @@ Windows SmartScreen will prompt the first time it runs. Code signing is out of
 scope for this build — add a signed step if you are distributing the installer
 beyond your own machine.
 
+## Building the standalone synthesizer
+
+The synthesizer proper is C++ and has no dependencies — not on Python, not on
+a phoneme dictionary, not on a ROM file. Both SC-01 mask ROMs and the whole
+English front end are compiled in, so the result is one library and nothing
+beside it. `csrc/votrax_capi.h` is the C API; `Tech overview.md`, Part 4, has
+the details.
+
+Windows, MSVC (from a Developer Command Prompt):
+
+```
+cl /std:c++17 /EHsc /O2 /LD /Icsrc /Fe:votraxsc01.dll csrcotrax_capi.cpp
+```
+
+Linux or macOS:
+
+```
+c++ -std=c++17 -O2 -shared -fPIC -Icsrc -o libvotraxsc01.so csrc/votrax_capi.cpp
+```
+
+Driving it is the loop any Votrax front end has always used — hand the chip a
+phone when it asks for one, and render audio in between:
+
+```python
+import ctypes
+lib = ctypes.CDLL("./votraxsc01.dll")
+lib.vx_create.restype = ctypes.c_void_p
+lib.vx_create.argtypes = [ctypes.c_int, ctypes.c_uint]
+lib.vx_sample_rate.restype = ctypes.c_double
+lib.vx_sample_rate.argtypes = [ctypes.c_void_p]
+
+chip = lib.vx_create(1, 0)          # 1 = the 1980 SC-01 mask, 0 = default clock
+buf = ctypes.create_string_buffer(4096)
+n = lib.ttv_translate(b"Hello.", buf, 4096)
+```
+
+Declare every `argtypes` before calling: without them ctypes guesses, and a
+guessed 32-bit handle in a 64-bit process is a crash that only shows up once
+the heap wanders past 4 GB.
+
 ## Building the NVDA addon
 
-From the repo root:
+The native add-on is one Python file and one DLL per architecture — about
+169 KB in total, with no bundled wheels, no pronunciation dictionary and no
+ROM files:
 
 ```
-python nvda-addon/package.py
+cd nvda-addon-native
+python package.py
 ```
 
-Output: `nvda-addon/votrax-<version>.nvda-addon` — drag-and-drop into NVDA to
-install.
+That builds both libraries (MSVC required; the script finds vcvars itself) and
+writes `votraxsc01-1.0.0.nvda-addon`. NVDA 2026 is 64-bit only, so the x64
+library is the one it loads and the packager refuses to produce an add-on
+without it; the x86 library ships alongside for NVDA 2025 and earlier, which
+ran 32-bit. The driver picks between them from the bitness of the process it
+finds itself in, so one add-on serves both.
 
+The add-on offers both mask revisions as voices, rate as constant-pitch
+truncation (with an "authentic rate" checkbox for the 1980 clock-scaling
+behaviour), and pitch quantised to the chip's four real inflection levels.
+
+`tests/test_nvda_driver.py` exercises the driver against stubbed NVDA modules,
+so the shim can be tested without a screen reader; it skips if the DLL has not
+been built.
+
+### The older Python-based addon
+
+`nvda-addon/` holds the previous driver, which used the pyvotrax emulator with
+numpy, scipy and CMUdict bundled alongside (~40 MB). It is superseded by the
+native add-on above but still builds with `python nvda-addon/package.py`.

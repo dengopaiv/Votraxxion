@@ -1,9 +1,21 @@
-"""Votrax SC-01A ROM data and parameter extraction.
+"""Votrax SC-01 / SC-01-A internal mask ROM data and parameter extraction.
 
 Raw ROM data from rom.cc, with bit extraction matching the original logic.
+The SC-01-A words have been verified byte-for-byte against the dumped 512-byte
+mask ROM (CRC32 fc416227); the 1980 SC-01 deltas come from that mask's own dump
+(CRC32 528d1c57). This mirrors csrc/rom_data.h — see "Tech overview.md",
+Part 1, "The two mask revisions".
 """
 
+from enum import IntEnum
 from typing import NamedTuple
+
+
+class MaskRevision(IntEnum):
+    """Which silicon revision's phoneme ROM to speak with."""
+
+    SC01A = 0   # the later revision, on most surviving hardware
+    SC01 = 1    # the 1980 part
 
 # Raw ROM data: rom[64][2] from rom.cc
 _RAW_ROM = [
@@ -74,6 +86,28 @@ _RAW_ROM = [
 ]
 
 
+# The 1980 SC-01 mask differs from the SC-01-A in exactly twelve rows, and
+# every difference is confined to one field: the voice amplitude (va) of the
+# open vowels. The original ran all twelve at full scale (va=15); the -A
+# revision pulled them down to 9, 11 or 14. word0 is identical throughout, so
+# only word1 needs overriding. Audibly the SC-01 is the louder, more strident
+# voice — roughly +29% RMS and +48% peak on ordinary speech.
+_SC01_W1_DELTAS = {
+    0x08: 0xC4E9C1A3,   # AH2   va  9 -> 15
+    0x13: 0x706981A3,   # AW1   va 11 -> 15
+    0x15: 0x84E9C1A3,   # AH1   va  9 -> 15
+    0x23: 0x54C981A3,   # UH3   va 14 -> 15
+    0x24: 0x84E9C1A3,   # AH    va  9 -> 15
+    0x2E: 0x74E881A7,   # AE    va 11 -> 15
+    0x2F: 0x74E881A7,   # AE1   va 11 -> 15
+    0x30: 0x606981A3,   # AW2   va 11 -> 15
+    0x31: 0x54C981A3,   # UH2   va 14 -> 15
+    0x32: 0xE4C981A3,   # UH1   va 14 -> 15
+    0x33: 0xB4C981A3,   # UH    va 14 -> 15
+    0x3D: 0xB06981A3,   # AW    va 11 -> 15
+}
+
+
 class PhonemeParams(NamedTuple):
     """Decoded ROM parameters for a single phoneme."""
     f1: int        # 4-bit filter 1 frequency
@@ -122,9 +156,12 @@ def _extract_clvd(word0: int, word1: int, slot: int) -> int:
     )
 
 
-def _decode_phoneme(index: int) -> PhonemeParams:
-    """Decode ROM data for a single phoneme."""
+def _decode_phoneme(index: int,
+                    revision: MaskRevision = MaskRevision.SC01A) -> PhonemeParams:
+    """Decode ROM data for a single phoneme, for the given mask revision."""
     word0, word1 = _RAW_ROM[index]
+    if revision == MaskRevision.SC01:
+        word1 = _SC01_W1_DELTAS.get(index, word1)
 
     f1 = _extract_param(word1, 0)
     va = _extract_param(word1, 1)
@@ -158,4 +195,13 @@ def _decode_phoneme(index: int) -> PhonemeParams:
 
 
 # Module-level ROM data, decoded at import time
-ROM_DATA = [_decode_phoneme(i) for i in range(64)]
+ROM_DATA_SC01A = [_decode_phoneme(i, MaskRevision.SC01A) for i in range(64)]
+ROM_DATA_SC01 = [_decode_phoneme(i, MaskRevision.SC01) for i in range(64)]
+
+#: Back-compatible default: the SC-01-A mask.
+ROM_DATA = ROM_DATA_SC01A
+
+
+def rom_table(revision: MaskRevision = MaskRevision.SC01A) -> list[PhonemeParams]:
+    """The 64 decoded phonemes for a mask revision."""
+    return ROM_DATA_SC01 if revision == MaskRevision.SC01 else ROM_DATA_SC01A
