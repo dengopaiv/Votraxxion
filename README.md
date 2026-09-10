@@ -19,6 +19,38 @@ discrete VS-6/ML-1 that came before both — are separate synthesizers with
 separate libraries and separate add-ons. This one is the SC-01, and only the
 SC-01.
 
+## Download
+
+Built binaries are on the
+[releases page](https://github.com/dengopaiv/Votraxxion/releases): the native
+GUI for both architectures, the NVDA add-on, and the synthesizer as a DLL with
+its headers — one zip of about 470 KB. Nothing in it needs Python, a runtime,
+or a data file, because both mask ROMs and the whole English front end are
+compiled into the C.
+
+Cutting a new one, from the repo root:
+
+```
+python nvda-addon/package.py          # both DLLs and the .nvda-addon
+gui-native\build.cmd x64
+gui-native\build.cmd x86
+python packaging/make_native_release.py
+```
+
+That writes `dist/votrax-sc01-<version>-win.zip` with release notes and a
+SHA-256 for every file — the build is unsigned, so a checksum somebody can
+actually check is the only thing that distinguishes it from any other unsigned
+executable. Missing inputs are a hard error rather than a quiet gap: a zip with
+the x86 build silently absent is worse than no zip.
+
+The version appears in three places that move together —
+`nvda-addon/manifest.ini`, the `VERSIONINFO` block in `gui-native/votrax_gui.rc`
+and `VERSION` in `packaging/make_native_release.py`.
+
+`packaging/make_release.py` is a different thing: it packages the wxPython
+Workbench, which is a ~150 MB PyInstaller bundle. Two artifacts, two audiences,
+two zips.
+
 ## Running from source
 
 Prerequisites:
