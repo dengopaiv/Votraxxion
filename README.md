@@ -13,7 +13,9 @@ published at [og.kervella.org/sc01a](http://og.kervella.org/sc01a), and tracks
 [MAME's votrax.cpp](https://github.com/mamedev/mame/blob/master/src/devices/sound/votrax.cpp).
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit
 together and [docs/tech-overview.md](docs/tech-overview.md) for the chip
-itself.
+itself. [docs/ROADMAP.md](docs/ROADMAP.md) is where this goes next: the SC-01
+is one of three Votrax sound engines, and the other two — the SC-02/SSI-263 and
+the discrete VS-6/ML-1 that came before both — are still to be taken apart.
 
 ## Running from source
 
