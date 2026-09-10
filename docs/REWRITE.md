@@ -218,3 +218,53 @@ A second new file, `tests/test_c_api.py`, covers what the differential test
 could not: the C++ had no limits, so truncation, queue overflow, clamping and
 NULL handling are all new behaviour with nothing to diff against. 37 tests,
 552 in total.
+
+---
+
+## The licensed exception, used once: pauses (2026-09-10)
+
+The rule at the top of this file allows exactly one kind of divergence — a
+deliberate change to `ttv_*` output, written down here rather than accepted as
+a quiet diff. This is that entry.
+
+**What was wrong.** Every punctuation mark in the language came out as the
+short pause. `NRL_RULES_PUNCT` mapped `,` `.` `?` and `!` each to a space,
+following NRL Report 7948, which was a letter-to-sound algorithm with no
+opinions about timing. Stage two then turned that space into **PA0** — 1952
+samples, 49 ms. Meanwhile the ARPABET map two tables down had rows saying `,`
+becomes **PA1** (7456 samples, 186 ms) and `.` becomes **PA1 PA1** (372 ms).
+Those rows were unreachable: nothing upstream could ever hand them a comma.
+
+So a full stop was worth 49 ms — about a fifth of what the table intended and
+a seventh of what the reference implementation produces. Sentences ran into
+each other, and clause boundaries were audible only as a catch of breath. It
+reads as words being dropped, which is how it was reported.
+
+**How it was found.** Not by reading the tables. The third-party
+`votraxsc01-1.0.2` add-on ships MAME's device wrapped in a `vx_*` C API and its
+own `ttv_translate`, so both front ends were driven over the same corpus and
+their phone histograms diffed. Ours never emitted PA1 once; the reference
+emitted it sixty times. Phone by phone on the same sentence:
+
+```
+'Hello, world.'   before   H EH L UH3 O1 U1 PA0 PA0 W UH3 ER L D PA0
+                  after    H EH L UH3 O1 U1 PA1 PA0 W UH3 ER L D PA1 PA1
+                  ref      H EH L UH3 O1 U1 PA1 PA0 W UH3 ER L D PA1 PA1
+```
+
+**The change.** `,` now emits `,`, and `.` `?` `!` all emit `.`, so stage two
+sees them and the map rows that were always there finally fire. Pitch is
+unaffected: the sentence contour reads the terminator from the original text
+and never consulted this table.
+
+The hyphen was left alone. There is a `-` → PA1 row in the map, and the
+reference does pause on a standalone dash, but a hyphen is far more often
+inside a word than standing as one, and 186 ms in the middle of "well-known"
+is worse than the pause being missed.
+
+**What it cost.** Four entries of `tests/data/golden.json` — `translate`,
+`translate_flat`, `inflection` and all thirty `speak_*` combinations — every
+one of them downstream of the front end. No DSP entry moved, which is the
+check that this stayed where it was meant to. The fingerprint was re-blessed
+against the corrected output, deliberately, which is what this section exists
+to record.

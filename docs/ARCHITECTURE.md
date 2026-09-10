@@ -38,11 +38,15 @@ what lets the NVDA add-on be 142 KB.
 |---|---|---|
 | `src/` | **The synthesizer.** C11. The only libc it uses is `string.h`, `math.h` and one `calloc`/`free` pair for the chip handle; nothing allocates once audio is running. This is the deliverable. | nothing |
 | `nvda-addon/` | The NVDA screen-reader driver: one Python shim over `src/` via ctypes, plus a packager that builds x64 and x86 libraries and zips a `.nvda-addon`. | `src/` |
+| `gui-native/` | A one-window Win32 program over `src/`, statically linked: text in, a voice picked from the two masks and the clock/speed controls, audio out or a WAV saved. One ~200 KB executable, no DLL and no data file. Same shape as the native GUIs in the sibling SAM and STSPEECH projects. | `src/` |
 | `csrc/` | pybind11 bindings exposing the chip core to Python as `pyvotrax._votrax_core`. | `src/`, pybind11 |
 | `pyvotrax/` | The Workbench: a wxPython GUI, a TTS pipeline over CMUdict, preset handling. A music-production tool, not the screen-reader path. | `csrc/`, numpy, scipy, wx |
 | `py_emu/` | The same DSP again, in pure Python, plus experimental "enhanced" modes (LF glottal, nasal anti-resonators) that the C core does not have. | numpy |
-| `tests/` | 552 tests. Some drive Python, some load the built DLL through ctypes and skip if it is not built. | both |
+| `tests/` | 558 tests. Some drive Python, some load the built DLL through ctypes and skip if it is not built. | both |
 | `tools/goldens.py` | Fingerprints a library's entire observable output so two implementations can be diffed sample-for-sample. Its committed output is `tests/data/golden.json`. | a built library |
+| `tools/verify_gui.py`, `tools/verify_gui_keyboard.py` | Check the built GUI executable rather than a harness that shares its sources: the audio against the library over ctypes, and the tab order against the real window with posted keypresses. | a built GUI |
+| `tools/verify_rom.py` | Checks all three ROM transcriptions against the dumps in `reference/roms/`. Runs inside the test suite too. | nothing |
+| `tools/compare_reference.py` | Diffs this engine against an independent build of MAME's device: audio per phone, phone-end timing, and which phones each front end ever emits. Takes the reference DLL as an argument; it is not vendored. | a reference DLL |
 | `reference/` | Galibert's gate-level simulator and MAME's `votrax.cpp`. Provenance, not code we build. | nothing |
 | `packaging/`, `presets/` | PyInstaller spec, Inno Setup script and factory presets for the Workbench. | `pyvotrax/` |
 

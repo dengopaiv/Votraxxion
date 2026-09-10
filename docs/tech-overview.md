@@ -487,6 +487,54 @@ Key optimizations:
 | Output | Real-time audio stream | Offline WAV generation |
 | Language | C++ (integrated in MAME framework) | Python + C++ pybind11 (standalone) |
 
+#### What those differences are worth, measured
+
+The first row is the one that matters, and until 2026-09-10 nobody had put a
+number on it. `tools/compare_reference.py` drives this engine and an
+independent build of MAME's device — the one in the third-party
+`votraxsc01-1.0.2` add-on — through the same phones with identical hold times,
+and diffs the samples. On the SC-01-A mask:
+
+| Phone | Ours, peak | MAME, peak | Ratio |
+|---|---:|---:|---:|
+| SH, CH | 16925 | 3420 | **4.95x** |
+| J | 14037 | 2750 | **5.10x** |
+| ZH | 15316 | 3288 | **4.66x** |
+| V | 7905 | 2611 | 3.03x |
+| F | 4234 | 2642 | 1.60x |
+| S, Z | 16124, 13773 | 14762, 12610 | 1.09x |
+| every vowel | — | — | 1.09x |
+
+The split is the whole story. MAME's `build_injection_filter` works out its
+coefficients and then throws them away — *"That ends up in a numerically
+unstable filter. Neutralize it for now."* — so MAME has **no F2-noise path at
+all**, and every fricative it produces reaches the output through the direct
+injection after F3. The sibilants, which are the phones that lean hardest on
+F2n, are therefore about five times louder here; S and Z, which lean on the
+direct path, differ by the same 9% as everything else.
+
+That 9% is a separate, uniform thing: `fx_fudge` on the final lowpass. It moves
+every sample and changes no balance.
+
+Neither number says which engine is right. MAME's comment is explicit that
+neutralizing was a stopgap, not a finding about the die, so this engine having
+a live F2n is arguably closer to the schematic — but *five times* is a lot to
+carry on an argument, and nobody has checked either against a real SC-01. That
+is what a recording of the physical part would settle.
+
+**Phone-end timing** is the other measured difference, and it is boringly
+consistent: `vx_ready` goes true exactly **5 samples earlier** here than in the
+reference, for every phone on both masks — 1952 against 1957 for PA0, 9760
+against 9765 for AH. 125 µs, constant, so it is a rounding difference in the
+phone timer rather than anything per-phone in the ROM.
+
+**Ten phones are silent when written on their own**, in both engines: PA0, PA1,
+STOP, and every stop consonant — DT, B, K, G, D, P, T. That is not a fault.
+A stop *is* a closure: the chip gates the vocal tract off, and what a listener
+hears as the burst is the following phone's onset, shaped by the interpolators
+as they leave the closure. A stop with nothing after it is silence, on the real
+chip too.
+
 ---
 
 ## Part 3: Areas for Improvement

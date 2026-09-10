@@ -46,6 +46,23 @@
 #include "ttv_tables.h"
 
 
+/* NRL Report 7948 maps every punctuation mark to a space, because it was a
+ * letter-to-sound algorithm and had no opinions about timing.  Here that is a
+ * bug: the ARPABET map below has entries turning "," into PA1 and "." into
+ * PA1 PA1, and a space into PA0, so mapping punctuation to a space made those
+ * rows unreachable and every pause in the language came out as the 49 ms PA0
+ * instead of the 186 ms PA1.  Commas and full stops were audible only as a
+ * catch of breath, which is what made connected speech run together.
+ *
+ * So the marks are passed through to stage two, which is where this codebase
+ * decides what a pause is worth.  "?" and "!" become "." because they end a
+ * sentence and should pause like one; their *pitch* comes from the contour,
+ * which reads the terminator from the original text and never saw this table.
+ *
+ * The hyphen still emits nothing, deliberately.  There is a "-" -> PA1 row in
+ * the map below, but a hyphen is far more often inside a word ("well-known")
+ * than standing alone as a dash, and a 186 ms gap in the middle of a compound
+ * is worse than no pause at all. */
 static const ttv_rule NRL_RULES_PUNCT[] = {
     { "",        " ",         "",        " " },
     { "",        "-",         "",        "" },
@@ -53,10 +70,10 @@ static const ttv_rule NRL_RULES_PUNCT[] = {
     { "#:.E",    "'S",        "",        "z" },
     { "#",       "'S",        "",        "z" },
     { "",        "'",         "",        "" },
-    { "",        ",",         "",        " " },
-    { "",        ".",         "",        " " },
-    { "",        "?",         "",        " " },
-    { "",        "!",         "",        " " },
+    { "",        ",",         "",        "," },
+    { "",        ".",         "",        "." },
+    { "",        "?",         "",        "." },
+    { "",        "!",         "",        "." },
 };
 
 static const ttv_rule NRL_RULES_A[] = {
