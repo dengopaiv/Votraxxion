@@ -4,10 +4,21 @@ The 1980 SC-01 and the later SC-01-A differ in exactly twelve ROM rows, and
 every difference is the voice amplitude of an open vowel. These tests pin that
 down on both backends, so a future edit to either ROM table has to be
 deliberate.
+
+TestAgainstTheDumps closes the loop the rest of the file cannot: every other
+test here compares one transcription of the ROM against another, and two
+transcriptions of the same typo agree perfectly. Those tests check the dumped
+mask ROMs in reference/roms/ instead, so the ground truth is the silicon.
 """
+
+import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+import verify_rom  # noqa: E402  -- needs the path insert above
 
 from py_emu.rom import MaskRevision as PyMask, rom_table
 from pyvotrax.chip import (
@@ -76,6 +87,42 @@ class TestBackendsAgree:
             b = rom_table(py)[i]
             for field in PHONEME_PARAM_FIELDS:
                 assert a[field] == getattr(b, field), (i, field)
+
+
+class TestAgainstTheDumps:
+    """The checked-in tables, against the two 512-byte mask ROM dumps."""
+
+    def test_dumps_are_the_known_masks(self):
+        for name, (crc, sha) in verify_rom.DUMPS.items():
+            assert verify_rom.dump_hashes(name) == (crc, sha), name
+
+    def test_every_transcription_agrees_with_the_silicon(self):
+        """src/votrax_rom.c, py_emu/rom.py and gate-sim/rom.cc, row by row."""
+        verify_rom.cross_check()   # raises VerifyError with the first divergence
+
+    def test_rom_is_content_addressed(self):
+        """Rows carry their own phone number and are not stored in phone order."""
+        order = verify_rom.dump_order("sc01a")
+        assert sorted(order) == list(range(64))
+        assert order != list(range(64))
+
+    @pytest.mark.parametrize("mask,dump", [
+        (MaskRevision.SC01A, "sc01a"),
+        (MaskRevision.SC01, "sc01"),
+    ])
+    def test_decoded_params_match_the_dump(self, mask, dump):
+        """The built extension's parameters, against a decode of the silicon."""
+        rows = verify_rom.load_dump(dump)
+        for phone in range(64):
+            want = verify_rom.decode(phone, *rows[phone])
+            got = rom_params(phone, mask)
+            for field in PHONEME_PARAM_FIELDS:
+                assert int(got[field]) == want[field], (phone, field)
+
+    def test_expected_va_table_comes_from_the_silicon(self):
+        """EXPECTED_VA above is what the two dumps actually differ by."""
+        delta = verify_rom.mask_delta()
+        assert {p: m["va"] for p, m in delta.items()} == EXPECTED_VA
 
 
 class TestMaskSelection:

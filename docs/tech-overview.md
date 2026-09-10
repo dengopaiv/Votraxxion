@@ -10,6 +10,8 @@ A comprehensive reference covering the original hardware, this emulation's archi
 
 The Votrax SC-01A traces back to **Richard T. Gagnon**, who developed a formant-based speech synthesis approach at **Federal Screw Works** (a Michigan automotive parts company that diversified into electronics). The speech synthesis division became **Votrax** in 1974. The **SC-01** shipped in 1980, followed by the improved **SC-01A** in 1981. It was one of the first single-chip speech synthesizers that didn't require external ROM — all 64 phonemes were encoded in an on-die 512-byte ROM, making it cheap and easy to integrate.
 
+The chip was not the beginning of the architecture but the end of it. Gagnon's design shipped for a decade before the SC-01, as rack and card-cage hardware — VS-4 (1972), VS-6 (1973–77), ML-1 (1978), and the potted VSK/VSL modules that the SC-01 is a single-chip reduction of. That generation had **five** cascaded formant resonators plus a nasal anti-resonator, 16 parameters per phoneme, a voltage-tunable vocal oscillator, and fricative noise injected at F2 so that F2–F5 resonated the fricatives too. Everything the chip lacks is something that was given up to fit 22 pins, which makes Gagnon's own description of the earlier hardware the best available specification for what an "enhanced" mode should be reaching for — see [ROADMAP.md](ROADMAP.md), Part 2.1, and the paper itself, which is held locally (References, below).
+
 ### Notable Uses
 
 | Product | Type | Year |
@@ -989,7 +991,7 @@ if the setting is quantised to those four steps.
 - **US Patent 3,836,717** — R.T. Gagnon, "Speech synthesizer," filed 1971, issued 1974. Original claims for the formant-cascade architecture; F1 0–1000 Hz, F2 500–3000 Hz, F3 1000–4000 Hz, fixed nasal 4000 Hz, 70 ms smoothing LPF, 30–150 ms phoneme duration. https://patents.google.com/patent/US3836717A/en
 - **US Patent 3,908,085** — R.T. Gagnon, 1975. Improvement patent covering the binary-weighted duty-cycle serialization and 16-parameter 4-bit ROM encoding with phoneme-timer ramp (slope = one of the 16 parameters). https://patents.google.com/patent/US3908085A/en
 - **US Patent 4,433,210** — "Switched-capacitor filter" — Covers the SC-01A's filter technology
-- **SC-01 internal mask ROM dumps** — the 512-byte on-die phoneme ROMs. SC-01 (1980 mask): CRC32 `528d1c57`, SHA1 `268b5884dce04e49e2376df3e2dc82e852b708c1`. SC-01-A: CRC32 `fc416227`, SHA1 `1d6da90b1807a01b5e186ef08476119a862b5e6d`. Both are compiled into `csrc/rom_data.h`; the SC-01-A words match Galibert's die transcription in `rom.cc` byte for byte, which is a useful independent confirmation of that table.
+- **SC-01 internal mask ROM dumps** — the 512-byte on-die phoneme ROMs, **held at `reference/roms/`**. SC-01 (1980 mask): CRC32 `528d1c57`, SHA1 `268b5884dce04e49e2376df3e2dc82e852b708c1`. SC-01-A: CRC32 `fc416227`, SHA1 `1d6da90b1807a01b5e186ef08476119a862b5e6d`. Both are compiled into `src/votrax_rom.c` and transcribed again into `py_emu/rom.py`; `tools/verify_rom.py` checks those two, and Galibert's `rom.cc`, against the dumps row by row, and `tests/test_masks.py::TestAgainstTheDumps` runs that check plus a parameter-level decode on every test run. See `reference/roms/README.md` for the row format — the ROM is content-addressed, and rows are not stored in phone order.
 
 ### Letter-to-sound references
 
@@ -1003,6 +1005,6 @@ if the setting is quantised to those four steps.
 
 ### Secondary references (for deeper enhancement work)
 
-- **Gagnon (1978)**, "VOTRAX Real Time Hardware for Phoneme Synthesis of Speech," Proc. ICASSP 1978, pp. 175–178. IEEE Xplore, paywalled.
+- **Gagnon (1978)**, "VOTRAX Real Time Hardware for Phoneme Synthesis of Speech," Proc. ICASSP 1978, pp. 175–178. **Held locally**, at `C:\GIT\speech synthesis\papers\analyzed\votrax-real-time-hardware-for-phoneme-synthesis-of-speech.pdf` — an earlier draft of this file recorded it as paywalled on IEEE Xplore, which is no longer the situation we are in. Four pages, and the primary source for the pre-chip architecture: the block diagram (input buffer → 16-parameter ROM lookup → articulation generators → 10-pole, 2-zero vocal tract), the vocal-tract diagram (F1–F5 cascade with the nasal notch feeding F1, vocal oscillator injected at F1, fricative noise at F2), the full 64-phoneme command set with Votrax's own gloss for each, and the design rationale for treating stops as a gate on the tract transfer function with articulation continuing through the closure.
 - **Klatt (1980)**, "Software for a cascade/parallel formant synthesizer," JASA 67(3):971–995. Foundation for independent formant-bandwidth control.
 - **Klatt & Klatt (1990)**, "Analysis, synthesis, and perception of voice quality variations among female and male talkers," JASA 87(2):820–857. Source of KLGLOTT88 (used in `py_emu` enhanced mode).

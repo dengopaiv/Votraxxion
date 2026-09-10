@@ -4,6 +4,13 @@ Nothing here is built, shipped, or imported. It is kept because it is the
 provenance of the tables in the synthesizer, and a claim about where ROM data
 came from is worth nothing if the source is only in a commit message.
 
+## `roms/`
+
+The two dumped 512-byte mask ROMs, `sc01.bin` and `sc01a.bin` — the only
+material here that is the chip itself rather than someone's reading of it.
+`tools/verify_rom.py` checks every transcription below against them, and the
+test suite runs that check. See `roms/README.md`.
+
 ## `gate-sim/`
 
 Olivier Galibert's gate-level simulator of the SC-01-A, written from his own
@@ -15,6 +22,8 @@ die photographs of the part (published at
 into the twelve phoneme parameters. `src/votrax_rom.c` carries the same numbers
 and the same extraction, and `py_emu/rom.py` a third copy in Python — three
 independent transcriptions that agree, which is why the tables can be trusted.
+All three agree with `roms/sc01a.bin` as well, row for row, which is why they
+can be trusted against the chip rather than just against each other.
 
 The rest (`blocks.cc`, `sched.cc`, `sram.cc`, `vsim.cc`, `state.h`) simulate
 the chip's digital half gate by gate. That is a slower and more literal thing
