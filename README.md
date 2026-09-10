@@ -289,3 +289,13 @@ There was an earlier driver that ran the pyvotrax emulator with numpy, scipy
 and CMUdict bundled alongside it, about 40 MB in all. The native add-on does
 the same job in 142 KB and replaced it; it is in the git history if you want to
 see it.
+
+## Licence
+
+BSD-3-Clause — see [LICENSE](LICENSE). Two copyright lines, because there are
+two bodies of work: Olivier Galibert's die analysis of the SC-01-A, which this
+synthesizer is built on and whose notice travels with anything derived from it,
+and the work done here on top of it. [NOTICE.md](NOTICE.md) says which is
+which, and also covers the parts that are nobody's to license — the mask ROM
+dumps kept as reference material, and the NRL rules, which are a US Government
+work in the public domain.

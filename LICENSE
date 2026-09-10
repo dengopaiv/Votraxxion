@@ -1,5 +1,15 @@
+SPDX-License-Identifier: BSD-3-Clause
+
 Copyright (c) 2015, Olivier Galibert
+Copyright (c) 2026, Päiv Dengo
 All rights reserved.
+
+The first line is the upstream: the die analysis, the ROM transcription and
+the filter topologies this synthesizer is built on are Olivier Galibert's work
+for MAME, under these terms, and the notice travels with anything derived from
+them. The second is the work done in this repository on top of that -- the C
+synthesizer and scheduler, the English front end, the NVDA driver, the GUI and
+the tooling. Both are under the same terms; see NOTICE.md for which is which.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
