@@ -17,7 +17,13 @@
 
 #include <stdint.h>
 
-#if defined(_WIN32)
+/* VOTRAX_STATIC: the sources are compiled straight into the program, so there
+ * is no import and nothing to export.  gui-native/ is built that way -- the
+ * whole synthesizer is six .c files and there is no reason for a one-window
+ * program to carry a DLL beside it. */
+#if defined(VOTRAX_STATIC)
+#  define VOTRAX_API
+#elif defined(_WIN32)
 #  if defined(VOTRAX_BUILD_DLL)
 #    define VOTRAX_API __declspec(dllexport)
 #  else

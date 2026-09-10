@@ -13,9 +13,11 @@ published at [og.kervella.org/sc01a](http://og.kervella.org/sc01a), and tracks
 [MAME's votrax.cpp](https://github.com/mamedev/mame/blob/master/src/devices/sound/votrax.cpp).
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit
 together and [docs/tech-overview.md](docs/tech-overview.md) for the chip
-itself. [docs/ROADMAP.md](docs/ROADMAP.md) is where this goes next: the SC-01
-is one of three Votrax sound engines, and the other two — the SC-02/SSI-263 and
-the discrete VS-6/ML-1 that came before both — are still to be taken apart.
+itself. [docs/ROADMAP.md](docs/ROADMAP.md) puts it in context: the SC-01 is one
+of three Votrax sound engines, and the other two — the SC-02/SSI-263 and the
+discrete VS-6/ML-1 that came before both — are separate synthesizers with
+separate libraries and separate add-ons. This one is the SC-01, and only the
+SC-01.
 
 ## Running from source
 
@@ -103,6 +105,55 @@ Output: `dist/VotraxWorkbenchSetup-<version>.exe`. This is an unsigned installer
 Windows SmartScreen will prompt the first time it runs. Code signing is out of
 scope for this build — add a signed step if you are distributing the installer
 beyond your own machine.
+
+## Building the native GUI
+
+`gui-native/` is a one-window Win32 program over the same C sources: type
+something, pick a voice, hear it, save it. It is the same shape as the native
+GUIs in the sibling SAM and STSPEECH projects, and unlike them it has nothing
+to bundle — both mask ROMs and the English front end are already inside the
+synthesizer, so the whole application is one executable of about 200 KB with a
+static CRT and no data file beside it.
+
+```
+gui-native\build.cmd          # x64
+gui-native\build.cmd x86      # and the 32-bit build
+```
+
+Output: `gui-native/build/votrax_gui-x64.exe`. The script finds MSVC itself
+through `vswhere`; there is nothing to generate first.
+
+What the window offers, beyond text in and audio out:
+
+- **Both mask revisions** as a voice choice — the 1980 SC-01 and the SC-01-A.
+- **Clock and speed as separate controls**, because they are separate things.
+  Moving the master clock is the 1980 hardware's single knob: tempo and pitch
+  rise together and the sample rate moves with them, 40 kHz at the datasheet
+  720 kHz and 60 kHz at the 1.08 MHz "chipmunk" preset. Speed truncates each
+  phone instead and leaves the clock alone, so tempo moves and pitch does not.
+- **Phoneme mode**, taking datasheet names — `H AH1 L OO PA1` — with an
+  optional `:0` to `:3` for per-phone pitch. **Convert to Phonemes** turns the
+  text box into exactly that notation, so what comes back can be edited and
+  spoken again.
+- **Voice presets** over the four things the chip actually has, including the
+  clock figures the Workbench's factory presets already use for Chipmunk and
+  Slow robot.
+
+Every control is a standard Win32 one with a label before it in tab order and
+an `&` accelerator, which is what a screen reader expects. Two tools check that
+this is true of the built binary rather than merely intended:
+
+```
+python tools/verify_gui.py            # audio, against the library itself
+python tools/verify_gui_keyboard.py   # the keyboard, against the real window
+```
+
+`verify_gui.py` drives `votrax_gui.exe --selftest` through 22 cases and compares
+the WAV bytes with the same work done through the shipped DLL over ctypes — the
+executable contains a second build of the engine, and this is what says the two
+agree. `verify_gui_keyboard.py` launches the real window, posts actual Tab
+keypresses into its queue and reads back where the focus went, which is how a
+keyboard trap in the multiline text box gets caught instead of argued about.
 
 ## Building the standalone synthesizer
 
