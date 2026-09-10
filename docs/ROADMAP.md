@@ -1,15 +1,21 @@
 # Roadmap — disassembling the Votrax engines
 
-Written 2026-09-10. This is a plan and an inventory, not an implementation.
-Nothing in it has been built yet; where it says "verified", that means verified
-in the session that wrote this file, and the check is named so it can be re-run.
+Written 2026-09-10, revised the same day. A plan and an inventory. Phase 1 is
+built; the rest is not. Where it says "verified", that means verified in the
+session that wrote this file, and the check is named so it can be re-run.
 
-The repository up to now has been one thing: an emulator of the Votrax SC-01,
-in C, with an NVDA add-on and a workbench on top. That still stands and still
-passes (552 tests, 2026-09-10). What changes here is the *scope*. "Votrax" is
-not one engine. It is three unrelated sound-generation architectures spread
-over fifteen years, plus a family of firmware front ends that fed them. This
-repository becomes the place where all of them are taken apart.
+This repository is one thing and stays one thing: an emulator of the Votrax
+SC-01, in C, with an NVDA add-on and a workbench on top. It passes 558 tests as
+of 2026-09-10. What this document adds is *context* rather than scope — because
+"Votrax" is not one engine, and knowing which of the three you are looking at
+decides what belongs here and what does not. There are three unrelated
+sound-generation architectures spread over fifteen years, plus the firmware
+front ends that fed them. Each is its own synthesizer, with its own library and
+its own add-on; the SC-01 is the one that lives here.
+
+The alternative — a single library with a chip selector, an add-on offering
+three generations of Votrax in one voice list — was the shape of the first
+draft of this plan and is not what gets built. See Part 0.
 
 ---
 
@@ -40,6 +46,26 @@ the same from a distance and are not:
 
 So: three engines, of which one is finished, one is faked, and one has never
 been attempted.
+
+### What that means for how this gets built
+
+Three engines does not mean one library with three modes. The rule is **one
+engine, one library, one add-on.** Somebody installing an NVDA add-on for the
+SC-01 gets the SC-01 and nothing else — not a menu of chips, not the SC-02's
+tables riding along unused, not a 1970s rack synthesizer they never asked for.
+It reads the same in the other direction: an SC-02 add-on ships the SC-02.
+
+The place they stack is the Workbench GUI, and only there. Choosing which
+Votrax to render a sample with is exactly what a sound-design tool is for, so
+the GUI offers whichever engines are present as a choice, while every
+screen-reader deliverable stays one chip wide.
+
+That settles the shape of everything below. Nothing merges into `src/`: the
+SC-02 does not become a third mask revision, the pre-chip engine does not
+become an "enhanced mode", and Phase 5 is not a switchboard inside one library.
+Each engine is built in its own tree against its own reference material, and
+produces its own library and its own add-on. What they share is method —
+the same verification discipline, the same golden-diff tooling — not a binary.
 
 ---
 
@@ -96,27 +122,23 @@ Held at `C:\GIT\speech synthesis\braillenspeak`:
   holds the 1985 and 1986 Silicon Systems Data Books, complete, with the 1986
   book also split into 20 PDFs of 15 pages each.
 
-This is a competent HLE and it is honest about being one. It is not the SC-02.
+This is a competent HLE and it is honest about being one. It is not the SC-02 —
+and it is a *different synthesizer* from the one this repository builds, so it
+stays in its own tree. See Phase 3.
 
 ### 1.3 Firmware: the engines that fed the chips
 
-- `C:\GIT\speech synthesis\roms\UK_V2.01_4.04_ROM.BIN` — 64 KB, currently
-  unattributed. Contents, from a first look: a prefix-compressed
-  word → phoneme exception dictionary occupying roughly 0x0000–0x2FFF and
-  0x6000–0x8FFF (each entry is a shared-prefix length byte, a word suffix, then
-  a phonetic string in a single-character alphabet), tables around 0xE000, and
-  code-shaped bytes from 0x9000 up. Version stamps "2.01" and "4.04" appear
-  near the end, matching the filename. The 6502 vectors at $FFFA/$FFFC/$FFFE
-  read C2B4 / C3DF / A61C; C3DF does not look like reset code, but A61C+9 is
-  `78 A2 FF 9A` — SEI / LDX #$FF / TXS, the classic 6502 reset stub. So either
-  the ROM is mapped at an offset, banked, or the vectors are not where they
-  appear. **This is the single most interesting unidentified artifact we hold**
-  and the first Ghidra job.
-- `C:\GIT\speech synthesis\braillenspeak` documents its target as a Braille 'n
-  Speak (Blazie Engineering), SSI-263 plus NRL letter-to-sound, confirmed by
-  Deane Blazie in *Living Blindfully* ep. 268. If the UK ROM is a Braille 'n
-  Speak firmware, its dictionary and rules are the real BNS front end, and that
-  ends the guesswork in `bnspeak/nrl_rules.py` (currently a ~30-rule stub).
+- `C:\GIT\speech synthesis\roms\UK_V2.01_4.04_ROM.BIN` — **not Votrax.** An
+  earlier draft of this file made this ROM the centrepiece of Phase 2 on the
+  strength of its shape alone: 64 KB, a prefix-compressed word → phoneme
+  exception dictionary in the low regions, tables around 0xE000, code from
+  0x9000 up, version stamps "2.01" and "4.04". That shape is what *any*
+  rule-plus-dictionary text-to-speech front end looks like, and it is not
+  evidence of whose. The ROM is most likely a **Dolphin Apollo 2** — a UK
+  hardware synthesizer with no Votrax silicon in it, and therefore somebody
+  else's project. Nothing inside the file settles it either way: it carries no
+  copyright banner, no product name, no ASCII identity string at all.
+  Recorded here only so the mistake is not made twice.
 - Not yet on disk, but dumped and freely available: the **Votrax Type 'N Talk**
   firmware (MC6802 + 4K ROM + SC-01A) as MAME's `votraxtnt`, and the **Personal
   Speech System** (Z80 + two 8K EPROMs + SC-01). These are Votrax's *own*
@@ -244,10 +266,11 @@ Two facts frame all SC-02 work below:
 
 | Piece | State | Evidence |
 |---|---|---|
-| SC-01 DSP in C | Complete | `src/`, 552 tests pass 2026-09-10 |
+| SC-01 DSP in C | Complete | `src/`, 558 tests pass 2026-09-10 |
 | Both mask ROMs | Complete and verified against the dumps | Part 1.1 |
 | English front end in C | Complete (NRL rules, not Votrax's own) | `src/ttv.c`, `src/ttv_tables.c` |
 | NVDA add-on | Complete, 142 KB, both architectures | `nvda-addon/` |
+| Native GUI | Complete, one ~200 KB exe, both architectures | `gui-native/`, `tools/verify_gui*.py` |
 | Workbench GUI | Complete | `pyvotrax/`, `packaging/` |
 | `py_emu` second transcription | Complete, plus experimental modes | `py_emu/` |
 | SC-02 | HLE only, in a sibling repository | `braillenspeak/` |
@@ -311,43 +334,54 @@ py_emu/rom.py                12/12 SC-01 deltas match sc01.bin
 mask delta: 12 phones, va only, 08, 13, 15, 23, 24, 2E, 2F, 30, 31, 32, 33, 3D
 ```
 
-### Phase 2 — Identify the firmware we already hold
+### Phase 2 — Votrax's own front end
+
+Our text-to-phoneme front end, `src/ttv.c`, is a reimplementation of NRL Report
+7948 — the same rules Votrax used, but not Votrax's code. What the Type 'N Talk
+actually shipped is a 4 K ROM that has been dumped for years and that nobody
+here has read. That is the front end of *this* synthesizer, so it is in scope
+where a foreign device's firmware is not.
 
 Ghidra 12.0 at `C:\GIT\environment\ghidra\ghidraRun.bat`; `aRomAT` beside it for
 first-pass ROM structure; `JAVA_HOME` is set, so Ghidra will start.
 
-1. **`UK_V2.01_4.04_ROM.BIN`.** Establish CPU and load address before anything
-   else: try 6502/65C02 at $0000 and at every 8 KB offset, look for a coherent
-   vector table and a reset stub, and use the `78 A2 FF 9A` at 0xA61C as the
-   anchor. 6802 and Z80 are the fallbacks. Confirm or refute Braille 'n Speak.
-2. **The dictionary format.** Decode the prefix-compression scheme fully and
-   the single-character phoneme alphabet it emits. If this is a BNS ROM, that
-   alphabet is an SSI-263 phoneme encoding and the mapping to the 64 mnemonics
-   in `ssi263_codec.py` is directly readable.
-3. **The rules.** Find the letter-to-sound engine that consults the dictionary.
-   Whether it is NRL Report 7948 or Votrax's own variant is a question the
-   disassembly answers and nothing else does.
-4. Optionally fetch `votraxtnt` from MAME and disassemble the 4 K Type 'N Talk
-   ROM alongside it — 4 K of 6802 is small, it is Votrax's own front end, and
-   kevtris has already documented the hardware.
+1. **Type 'N Talk** — fetch `votraxtnt` from MAME and disassemble the 4 K
+   MC6802 ROM. Small, well-documented hardware (kevtris has the board), and it
+   drives an SC-01A over exactly the interface `src/votrax.c` implements.
+2. **The rules and the exception list.** Find the letter-to-sound engine and
+   whatever dictionary sits beside it. The question worth answering is where it
+   diverges from NRL 7948 — every divergence is a place `src/ttv.c` could be
+   speaking differently from the hardware it claims to reproduce.
+3. **The phone stream.** Recover how the firmware paces phones and drives the
+   inflection pins, and diff that against our scheduler.
+4. If the Personal Speech System dumps (Z80, two 8 K EPROMs) surface, the same
+   treatment — it is the same front end with more room.
 
 **Deliverable:** `docs/firmware/` — one document per ROM: identification,
 memory map, the tables found, and the extracted data as JSON.
-**Gate:** the dictionary decoder round-trips — every entry in the ROM decodes
-to a word and a phoneme string, with no leftover bytes and no unparsed regions
-in the dictionary segments.
+**Gate:** a diff of Votrax's rules against `src/ttv_tables.c`, with every
+divergence either adopted or written down as a deliberate difference. "No
+divergences found" is a legitimate outcome and still needs the diff to show it.
 
-### Phase 3 — The SC-02, for real
+### Phase 3 — The SC-02, for real — *its own synthesizer, elsewhere*
 
-This is the frontier: nobody has a low-level SC-02. Three tiers, in order of
-increasing cost, and it is legitimate to stop after any one of them.
+This is the frontier: nobody has a low-level SC-02. It is also not this
+repository's chip. The work belongs in `braillenspeak`'s tree (or a tree of its
+own), producing an SC-02 library and an SC-02 add-on that ship without a byte
+of SC-01 in them. What comes back here is method, and eventually the golden
+tooling of Phase 5 — never a merge into `src/`.
 
-**Tier A — datasheet-exact register model (weeks).** Move `braillenspeak`'s
-SSI-263 work into this repository as a first-class C engine: the real register
-map, the real timing equations, the corrected phoneme table, its own 64-entry
-parameter table read from the datasheet's phoneme chart — but still voiced
-through the SC-01 filter bank. Honest labelling: this is an SC-02 *front end*
-on SC-01 silicon, which is what every existing emulation is, done better.
+Three tiers, in order of increasing cost, and it is legitimate to stop after
+any one of them.
+
+**Tier A — datasheet-exact register model (weeks).** Promote the existing
+SSI-263 work to a first-class C engine in its own tree: the real register map,
+the real timing equations, the corrected phoneme table, its own 64-entry
+parameter table read from the datasheet's phoneme chart. It borrows the SC-01
+filter bank as a *stand-in* while nothing better exists, and says so — this is
+an SC-02 front end voiced on SC-01 silicon, which is what every existing
+emulation is, done better. Borrowing a filter bank is not the same as living in
+the SC-01's library, and the deliverable is still SC-02-only.
 
 **Tier B — architectural model (months).** Reconstruct the SC-02's own filter
 bank from the datasheet plus the SC-01 die as a structural prior: the 12-bit
@@ -368,12 +402,17 @@ current HLE by ear.
 **Gate for Tier B:** the model reproduces measured formant tracks from real
 SSI-263 recordings, not just plausible-sounding output.
 
-### Phase 4 — The pre-chip engine (VS-6 / ML-1)
+### Phase 4 — The pre-chip engine (VS-6 / ML-1) — *its own synthesizer too*
 
 Nobody has emulated this either, and unlike the SC-02 there is no silicon to
 photograph — but there is a full architectural description from the designer,
-two patents, and our own SC-01 filter code as a starting point. Build it from
-the paper: five cascaded formants, a nasal notch resonator, a tunable
+two patents, and our own SC-01 filter code as a starting point. It is a third
+synthesizer with a third deliverable: a rack-Votrax library and, if anyone
+wants to hear a screen reader speak in it, a rack-Votrax add-on. It is
+emphatically *not* an "enhanced mode" bolted onto the SC-01, which is what it
+would become if it were built in this tree.
+
+Build it from the paper: five cascaded formants, a nasal notch resonator, a tunable
 oscillator with real harmonic content, fricative injection at F2, articulation
 generators as first- and second-order smoothers over 14 parameters, and stops
 as a gate with articulation continuing through the closure.
@@ -390,17 +429,35 @@ upsampled to 16, is recognisably the same *voice family* as an SC-01 while
 being audibly less buzzy — and the differences point in the direction the 1978
 paper predicts (nasals, voiced fricatives, stop bursts).
 
-### Phase 5 — Cross-engine verification and packaging
+### Phase 5 — Shared method, separate deliverables
 
-1. Extend `tools/goldens.py` to fingerprint every engine, not just the SC-01,
-   so that any two implementations of the same engine can be diffed
+1. Extend `tools/goldens.py` to fingerprint any engine, not just the SC-01, so
+   that two implementations of the *same* engine can be diffed
    sample-for-sample — including the third-party `sc01-x64.dll`, which is
-   MAME's device wrapped in a C API and therefore an *independent* SC-01 to
-   check ourselves against. That comparison is cheap and worth doing before any
+   MAME's device wrapped in a C API and therefore an independent SC-01 to check
+   ourselves against. That comparison is cheap and worth doing before any
    Ghidra work on it: if the audio matches, the disassembly tells us nothing we
    do not already know.
-2. One `vx_*` API across engines, one library, engine selected at creation.
-3. The NVDA add-on gains the SC-02 and (if Phase 4 lands) the VS-6 as voices.
+2. **One API shape, not one library.** Every engine exposes the same
+   `vx_*`-style entry points — create, speak, render, cancel, rate, pitch — so
+   a driver written against one is a driver written against all of them. They
+   stay separate binaries: an add-on links exactly one, and a GUI links as many
+   as it finds.
+3. **One add-on per engine.** `nvda-addon/` keeps shipping the SC-01 and only
+   the SC-01. An SC-02 add-on is built the same way from its own tree, out of
+   its own library, and appears in NVDA's synthesizer list as its own entry
+   rather than as a voice hidden inside somebody else's driver.
+4. **The Workbench is where they stack.** The GUI is the one place a person
+   *wants* the choice — rendering the same phrase through the SC-01, the SC-02
+   and the rack Votrax to compare is the whole point of a sound-design tool.
+   It loads whichever engine libraries are present and offers the ones it
+   found, degrading quietly to just the SC-01 when it is the only one built.
+
+   `gui-native/` is not that, and the two should not be confused. It is a
+   single-engine native front end — the SC-01 and nothing else, statically
+   linked, no Python — built to the same shape as the native GUIs in the
+   sibling SAM and STSPEECH projects. Each engine gets one of those; the
+   stacking GUI is a separate thing that sits above all of them.
 
 ---
 
@@ -420,8 +477,13 @@ Everything needed is installed; see `C:\GIT\environment\TOOLCHAIN.md`.
 
 ## Part 6 — Open questions
 
-1. What device is `UK_V2.01_4.04_ROM.BIN` from, and on what CPU? Phase 2
-   answers this; everything about the BNS front end waits on it.
+1. Where does the multi-engine Workbench live once there is more than one
+   engine to stack? It is in this repository today, on top of the SC-01 it was
+   written for. The moment an SC-02 library exists, the GUI is the one
+   component that legitimately spans engines while every other deliverable
+   stays one chip wide — so it either stays here and loads foreign libraries,
+   or moves out to sit above all of them. Worth deciding before Phase 3 Tier A
+   ships, not after.
 2. Do we hold, or can we obtain, a real SSI-263 recording set for calibration?
    Without it Tier B of Phase 3 cannot be gated honestly.
 3. Is the SC-02's parameter interpolation the same mechanism as the SC-01's, or
@@ -430,8 +492,20 @@ Everything needed is installed; see `C:\GIT\environment\TOOLCHAIN.md`.
 4. Was the SC-02's filter bank actually the same silicon as the SC-01's, or a
    redesign? Every secondary source says "same analog core"; none of them cite
    a die. Tier C is the only real answer.
-5. Does the third-party `sc01-x64.dll` produce bit-identical audio to ours?
-   Cheap to answer, and it decides whether it is worth disassembling at all.
+5. ~~Does the third-party `sc01-x64.dll` produce bit-identical audio to ours?~~
+   **Answered 2026-09-10: no, and the differences are worth having written
+   down.** `tools/compare_reference.py` drives both through the same phones.
+   Ten of 64 match exactly (the silent ones), ten within one LSB; every vowel
+   is 9% louder here (`fx_fudge`); the sibilants SH, CH, ZH and J are about
+   **five times** louder, because MAME neutralizes its F2-noise injection
+   filter as an admitted stopgap and this engine runs a stable version of it;
+   and `vx_ready` fires a constant 5 samples earlier here. No disassembly was
+   needed — the binary exposes a `vx_*` C API and takes the ROM as a buffer,
+   so it can simply be driven. See `docs/tech-overview.md`, Part 2.
+
+   The same tool found something the audio diff would have missed: our front
+   end never emitted PA1, so every comma and full stop was a 49 ms PA0 instead
+   of 186 ms and 372 ms. Fixed; recorded in `docs/REWRITE.md`.
 
 ---
 
@@ -444,9 +518,10 @@ Everything needed is installed; see `C:\GIT\environment\TOOLCHAIN.md`.
   stopped producing them in the late 1980s. They are archived openly in MAME and
   everywhere else; they are kept here as reference material with provenance
   recorded, not as a redistributable product.
-- `UK_V2.01_4.04_ROM.BIN` is third-party firmware of unknown status. Until
-  Phase 2 identifies it, treat it as reference-only: disassemble and document,
-  do not vendor its tables into shipped code without settling that question.
+- The Type 'N Talk and Personal Speech System firmware ROMs are Votrax's own
+  code, dumped and archived in MAME. Disassembling them to compare against our
+  front end is reference work; lifting their tables into shipped code is a
+  separate question that has to be settled before, not after.
 - Gagnon's patents (3,836,717; 3,908,085) and US 4,433,210 have long expired.
   NRL Report 7948 is a US Government work.
 
