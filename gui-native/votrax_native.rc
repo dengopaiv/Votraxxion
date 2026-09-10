@@ -1,4 +1,4 @@
-// votrax_gui.rc - resources for the Votrax SC-01 GUI.
+// votrax_native.rc - resources for the Votrax Native GUI.
 //
 // Short, because there is nothing to carry. The sibling GUIs link a
 // multi-megabyte pronunciation dictionary in here as RCDATA; this one
@@ -8,7 +8,7 @@
 #include <windows.h>
 #include "resource.h"
 
-CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "votrax_gui.manifest"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "votrax_native.manifest"
 
 // Keep in step with the version in nvda-addon/manifest.ini.
 VS_VERSION_INFO VERSIONINFO
@@ -24,11 +24,11 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "FileDescription", "Votrax SC-01 Speech Synthesizer"
+            VALUE "FileDescription", "Votrax Native - SC-01 Speech Synthesizer"
             VALUE "FileVersion",     "1.0.0.0"
-            VALUE "InternalName",    "votrax_gui"
-            VALUE "OriginalFilename","votrax_gui.exe"
-            VALUE "ProductName",     "Votrax SC-01"
+            VALUE "InternalName",    "votrax_native"
+            VALUE "OriginalFilename","votrax_native.exe"
+            VALUE "ProductName",     "Votrax Native"
             VALUE "ProductVersion",  "1.0.0.0"
         END
     END

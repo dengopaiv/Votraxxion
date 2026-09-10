@@ -21,9 +21,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-DRIVER = ROOT / "nvda-addon" / "addon" / "synthDrivers" / "votraxsc01.py"
-DLL = DRIVER.parent / ("votraxsc01-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8
-                       else "votraxsc01-x86.dll")
+DRIVER = ROOT / "nvda-addon" / "addon" / "synthDrivers" / "votraxNative.py"
+DLL = DRIVER.parent / ("votraxNative-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8
+                       else "votraxNative-x86.dll")
 
 pytestmark = pytest.mark.skipif(
     not DLL.is_file(),
@@ -138,7 +138,7 @@ def _install_stubs():
 @pytest.fixture(scope="module")
 def driver_module():
     sdh, commands = _install_stubs()
-    spec = importlib.util.spec_from_file_location("votraxsc01_driver", DRIVER)
+    spec = importlib.util.spec_from_file_location("votraxNative_driver", DRIVER)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module._test_sdh = sdh

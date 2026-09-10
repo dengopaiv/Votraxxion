@@ -1,7 +1,9 @@
-# Votrax SC-01
+# Votrax Native
 
-An emulator of the Votrax SC-01 speech synthesizer chip, in C, packaged as an
-NVDA screen-reader add-on and as a Windows music-production workbench.
+A native port of the Votrax SC-01 speech synthesizer chip -- the whole chip in
+C, packaged as an NVDA screen-reader add-on and as a Windows GUI. “Votrax
+Native” is the name the add-on and the GUI ship under; the chip they emulate
+is the SC-01, and nothing else.
 
 The synthesizer is C with no dependencies -- not on Python, not on a phoneme
 dictionary, not on a ROM file. Both mask ROMs and the whole English front end
@@ -23,10 +25,11 @@ SC-01.
 
 Built binaries are on the
 [releases page](https://github.com/dengopaiv/Votraxxion/releases): the native
-GUI for both architectures, the NVDA add-on, and the synthesizer as a DLL with
-its headers — one zip of about 470 KB. Nothing in it needs Python, a runtime,
-or a data file, because both mask ROMs and the whole English front end are
-compiled into the C.
+GUI for both architectures and the NVDA add-on, in one zip of about 330 KB.
+Nothing in it needs Python, a runtime, or a data file, because both mask ROMs
+and the whole English front end are compiled into the C. Embedding the
+synthesizer in something else is a source build rather than a download — see
+“Building the standalone synthesizer” below.
 
 Cutting a new one, from the repo root:
 
@@ -37,14 +40,14 @@ gui-native\build.cmd x86
 python packaging/make_native_release.py
 ```
 
-That writes `dist/votrax-sc01-<version>-win.zip` with release notes and a
+That writes `dist/votrax-native-<version>-win.zip` with release notes and a
 SHA-256 for every file — the build is unsigned, so a checksum somebody can
 actually check is the only thing that distinguishes it from any other unsigned
 executable. Missing inputs are a hard error rather than a quiet gap: a zip with
 the x86 build silently absent is worse than no zip.
 
 The version appears in three places that move together —
-`nvda-addon/manifest.ini`, the `VERSIONINFO` block in `gui-native/votrax_gui.rc`
+`nvda-addon/manifest.ini`, the `VERSIONINFO` block in `gui-native/votrax_native.rc`
 and `VERSION` in `packaging/make_native_release.py`.
 
 `packaging/make_release.py` is a different thing: it packages the wxPython
@@ -152,7 +155,7 @@ gui-native\build.cmd          # x64
 gui-native\build.cmd x86      # and the 32-bit build
 ```
 
-Output: `gui-native/build/votrax_gui-x64.exe`. The script finds MSVC itself
+Output: `gui-native/build/votrax_native-x64.exe`. The script finds MSVC itself
 through `vswhere`; there is nothing to generate first.
 
 What the window offers, beyond text in and audio out:
@@ -180,7 +183,7 @@ python tools/verify_gui.py            # audio, against the library itself
 python tools/verify_gui_keyboard.py   # the keyboard, against the real window
 ```
 
-`verify_gui.py` drives `votrax_gui.exe --selftest` through 22 cases and compares
+`verify_gui.py` drives `votrax_native.exe --selftest` through 22 cases and compares
 the WAV bytes with the same work done through the shipped DLL over ctypes — the
 executable contains a second build of the engine, and this is what says the two
 agree. `verify_gui_keyboard.py` launches the real window, posts actual Tab
@@ -197,13 +200,13 @@ path with a space in it breaks the obvious command line.
 
 ```
 cd src
-cl /std:c11 /O2 /LD /I. /Fe:votraxsc01.dll votrax.c votrax_core.c votrax_filters.c votrax_rom.c ttv.c ttv_tables.c
+cl /std:c11 /O2 /LD /I. /Fe:votraxNative.dll votrax.c votrax_core.c votrax_filters.c votrax_rom.c ttv.c ttv_tables.c
 ```
 
 Linux or macOS:
 
 ```
-cc -std=c11 -O2 -shared -fPIC -Isrc -o libvotraxsc01.so src/*.c
+cc -std=c11 -O2 -shared -fPIC -Isrc -o libvotraxNative.so src/*.c
 ```
 
 Driving it is the loop any Votrax front end has always used — turn text into
@@ -212,7 +215,7 @@ phones, queue them, and pull audio until the queue drains:
 ```python
 import ctypes, wave
 
-lib = ctypes.CDLL("./votraxsc01.dll")
+lib = ctypes.CDLL("./votraxNative.dll")
 u8p = ctypes.POINTER(ctypes.c_ubyte)
 for name, args, ret in [
     ("vx_create",      [ctypes.c_int, ctypes.c_uint],              ctypes.c_void_p),
@@ -271,7 +274,7 @@ python package.py
 
 That builds both libraries (the script drives MSVC and finds vcvars itself; the
 sources are plain C11 and build under MinGW or clang too) and writes
-`votraxsc01-1.0.0.nvda-addon`. NVDA 2026 is 64-bit only, so the x64
+`votraxNative-1.0.0.nvda-addon`. NVDA 2026 is 64-bit only, so the x64
 library is the one it loads and the packager refuses to produce an add-on
 without it; the x86 library ships alongside for NVDA 2025 and earlier, which
 ran 32-bit. The driver picks between them from the bitness of the process it
@@ -280,6 +283,10 @@ finds itself in, so one add-on serves both.
 The add-on offers both mask revisions as voices, rate as constant-pitch
 truncation (with an "authentic rate" checkbox for the 1980 clock-scaling
 behaviour), and pitch quantised to the chip's four real inflection levels.
+
+It appears in NVDA’s synthesizer list as **Votrax Native (SC-01)**, under the
+add-on id `votraxNative` — distinct from the third-party `votraxsc01` add-on
+that wraps MAME’s device, so the two can be installed side by side.
 
 `tests/test_nvda_driver.py` exercises the driver against stubbed NVDA modules,
 so the shim can be tested without a screen reader; it skips if the DLL has not

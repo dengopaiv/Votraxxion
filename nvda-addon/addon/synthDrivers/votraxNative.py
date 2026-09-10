@@ -2,15 +2,15 @@
 """NVDA synth driver for the Votrax SC-01, over the native synthesizer.
 
 The whole synthesizer — both mask ROMs, the letter-to-sound rules, the phone
-mapping, the chip itself — is inside votraxsc01.dll.  This file is only the
+mapping, the chip itself — is inside votraxNative.dll.  This file is only the
 shim: it turns NVDA's speech sequences into work items on a queue, and a
 single thread turns those into audio.
 
-  votraxsc01.dll (ctypes)  -- everything: ttv_* text to phones, vx_* the chip
-  _Lib                     -- the ctypes bindings, declared once
-  SynthDriver              -- NVDA-facing; queues work
-  _speak_thread            -- the only thread that touches the chip after
-                              startup, so nothing needs locking
+  votraxNative.dll (ctypes)  -- everything: ttv_* text to phones, vx_* the chip
+  _Lib                       -- the ctypes bindings, declared once
+  SynthDriver                -- NVDA-facing; queues work
+  _speak_thread              -- the only thread that touches the chip after
+                                startup, so nothing needs locking
 
 There is no numpy, no scipy, no pronunciation dictionary and no ROM file: the
 add-on is this file plus one library per architecture — x64 for NVDA 2026,
@@ -62,8 +62,8 @@ def _dll_name():
 	# Chosen from the bitness of the process we are actually running in, not
 	# from the NVDA version: NVDA 2026 is 64-bit only, 2025 and earlier were
 	# 32-bit, and the add-on ships both libraries so one build serves both.
-	return "votraxsc01-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8 \
-		else "votraxsc01-x86.dll"
+	return "votraxNative-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8 \
+		else "votraxNative-x86.dll"
 
 
 def _output_device():
@@ -177,9 +177,9 @@ class _Chip:
 
 
 class SynthDriver(BaseSynthDriver):
-	name = "votraxsc01"
+	name = "votraxNative"
 	# Translators: description of the Votrax speech synthesizer.
-	description = _("Votrax SC-01")
+	description = _("Votrax Native (SC-01)")
 
 	supportedSettings = (
 		BaseSynthDriver.VoiceSetting(),
@@ -222,7 +222,7 @@ class SynthDriver(BaseSynthDriver):
 		# exists; afterwards the chip belongs to that thread alone.
 		self._open_voice(self._voice)
 		self._thread = threading.Thread(
-			target=self._speak_thread, name="votraxsc01", daemon=True)
+			target=self._speak_thread, name="votraxNative", daemon=True)
 		self._thread.start()
 
 	def terminate(self):

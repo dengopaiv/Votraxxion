@@ -1,5 +1,5 @@
 /*
- * votrax_gui.cpp - Votrax SC-01 desktop GUI, Win32, no Python.
+ * votrax_native.cpp - Votrax Native desktop GUI (SC-01), Win32, no Python.
  *
  * The same shape as the SAM and STSPEECH native GUIs, over the C engine
  * in src/. There is nothing to bundle alongside it: both mask ROMs and
@@ -128,7 +128,7 @@ static const PresetSpec PRESETS[] = {
 #define PRESET_CUSTOM PRESET_COUNT      /* the index of the "Custom" item */
 
 static const wchar_t *DEFAULT_TEXT = L"Hello, my name is Votrax S C zero one.";
-static const wchar_t *WINDOW_TITLE = L"Votrax SC-01 Speech Synthesizer";
+static const wchar_t *WINDOW_TITLE = L"Votrax Native - SC-01 Speech Synthesizer";
 
 /* Room for one utterance of phones. ttv_translate will not produce more
  * than TTV_PHONES_MAX for one call, and hand-typed phoneme strings are
@@ -1211,7 +1211,7 @@ static void MakeFont(void)
  * Headless self-test, so the shipped binary can be checked rather than a
  * separate harness that merely shares its sources.
  *
- *   votrax_gui.exe --selftest MASK CLOCKKHZ SPEEDPCT INFLECTION
+ *   votrax_native.exe --selftest MASK CLOCKKHZ SPEEDPCT INFLECTION
  *                             PHONEMEMODE OUT.WAV TEXT
  *
  * MASK is 0 for the SC-01-A and 1 for the 1980 SC-01, PHONEMEMODE is 0
@@ -1302,7 +1302,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int show)
     wc.hInstance = inst;
     wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-    wc.lpszClassName = L"VotraxSC01MainWindow";
+    wc.lpszClassName = L"VotraxNativeMainWindow";
     wc.hIcon = LoadIconW(NULL, IDI_APPLICATION);
     wc.hIconSm = LoadIconW(NULL, IDI_APPLICATION);
     if (!RegisterClassExW(&wc)) {

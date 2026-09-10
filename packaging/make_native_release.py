@@ -7,7 +7,7 @@ Run from the repo root, after building everything it collects:
     gui-native\\build.cmd x86
     python packaging/make_native_release.py
 
-The zip lands at dist/votrax-sc01-<version>-win.zip.
+The zip lands at dist/votrax-native-<version>-win.zip.
 
 This is the *native* release -- the C synthesizer and the things built
 directly on it. It is deliberately separate from make_release.py, which
@@ -30,35 +30,29 @@ import zipfile
 from pathlib import Path
 
 # Matches nvda-addon/manifest.ini and the VERSIONINFO in
-# gui-native/votrax_gui.rc. All three move together.
+# gui-native/votrax_native.rc. All three move together.
 VERSION = "1.0.0"
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
-OUT = DIST / f"votrax-sc01-{VERSION}-win.zip"
+OUT = DIST / f"votrax-native-{VERSION}-win.zip"
 
 #: (source, name inside the zip). Missing files are a hard error rather
 #: than a quiet gap -- a release zip with the x86 build silently absent is
 #: worse than no zip.
 CONTENTS = [
-    (ROOT / "gui-native" / "build" / "votrax_gui-x64.exe",
-     "gui/votrax_gui-x64.exe"),
-    (ROOT / "gui-native" / "build" / "votrax_gui-x86.exe",
-     "gui/votrax_gui-x86.exe"),
-    (ROOT / "nvda-addon" / f"votraxsc01-{VERSION}.nvda-addon",
-     f"nvda-addon/votraxsc01-{VERSION}.nvda-addon"),
-    (ROOT / "nvda-addon" / "addon" / "synthDrivers" / "votraxsc01-x64.dll",
-     "library/votraxsc01-x64.dll"),
-    (ROOT / "nvda-addon" / "addon" / "synthDrivers" / "votraxsc01-x86.dll",
-     "library/votraxsc01-x86.dll"),
-    (ROOT / "src" / "votrax.h", "library/votrax.h"),
-    (ROOT / "src" / "ttv.h", "library/ttv.h"),
+    (ROOT / "gui-native" / "build" / "votrax_native-x64.exe",
+     "gui/votrax_native-x64.exe"),
+    (ROOT / "gui-native" / "build" / "votrax_native-x86.exe",
+     "gui/votrax_native-x86.exe"),
+    (ROOT / "nvda-addon" / f"votraxNative-{VERSION}.nvda-addon",
+     f"nvda-addon/votraxNative-{VERSION}.nvda-addon"),
     (ROOT / "LICENSE", "LICENSE"),
 ]
 
 NOTES_HEAD = f"""\
-Votrax SC-01 — native release {VERSION} (Windows)
-=================================================
+Votrax Native {VERSION} — the SC-01, in C (Windows)
+===============================================
 
 Build date: {time.strftime('%Y-%m-%d')}
 
@@ -77,7 +71,8 @@ What is in it
 
 gui/            A standalone speech workbench. Type text or phonemes, pick a
                 voice, hear it, save a WAV. One executable, no installer.
-                Take votrax_gui-x64.exe unless you are on 32-bit Windows.
+                Take votrax_native-x64.exe unless you are on 32-bit
+                Windows.
 
 nvda-addon/     The NVDA screen-reader driver. Open the .nvda-addon file
                 with NVDA running, or use Tools > Add-on store > Install
@@ -85,15 +80,14 @@ nvda-addon/     The NVDA screen-reader driver. Open the .nvda-addon file
                 NVDA 2023.1 or later; the x86 library ships alongside for
                 NVDA 2025 and earlier, which ran 32-bit.
 
-library/        The synthesizer as a DLL, with its two headers, for anyone
-                embedding it. The C API is documented in votrax.h; the
-                entry points are vx_* for the chip and ttv_* for the text
-                front end. No ROM file to find and nothing to initialise.
+Embedding the synthesizer in something else is a matter of building it from
+source: it is six C files with no dependencies, and src/votrax.h is the API.
+See the repository's README.
 
 Running the GUI
 ---------------
 
-Double-click gui\\votrax_gui-x64.exe. There is nothing to install and nothing
+Double-click gui\\votrax_native-x64.exe. There is nothing to install and nothing
 to extract beside it.
 
 The build is unsigned, so Windows SmartScreen will warn the first time it

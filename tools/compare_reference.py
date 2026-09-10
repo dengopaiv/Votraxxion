@@ -46,7 +46,7 @@ sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import goldens  # noqa: E402
 
 OURS = os.path.join(ROOT, 'nvda-addon', 'addon', 'synthDrivers',
-                    'votraxsc01-x64.dll')
+                    'votraxNative-x64.dll')
 DEFAULT_ROMS = os.path.join(ROOT, 'reference', 'roms')
 
 HOLD = 8000          # samples held per phone, identical for both engines

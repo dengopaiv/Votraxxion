@@ -9,7 +9,7 @@ file to find -- but it also means the shipped binary contains a *second*
 build of the engine, and nothing so far has checked that the second build
 says the same thing as the first.
 
-So: drive `votrax_gui.exe --selftest`, which runs the same VoiceFrom,
+So: drive `votrax_native.exe --selftest`, which runs the same VoiceFrom,
 BuildPhones, RenderPhones and MakeWav the buttons run, and drive the DLL
 the NVDA add-on ships through ctypes with the same settings. Compare the
 WAV bytes. A match is a statement about what ships; a harness that merely
@@ -50,7 +50,7 @@ PHONE_BUF = 4096
 #: how they get covered: choosing a preset only writes these four control
 #: values, so passing the values is passing the preset.
 CASES = [
-    # The presets, in the order gui-native/votrax_gui.cpp lists them.
+    # The presets, in the order gui-native/votrax_native.cpp lists them.
     (0,  720, 100, 1, 0, 'Hello, my name is Votrax S C zero one.'),
     (1,  720, 100, 1, 0, 'Hello, my name is Votrax S C zero one.'),
     (0,  720, 300, 1, 0, 'Hello, my name is Votrax S C zero one.'),
@@ -89,11 +89,11 @@ CASES = [
 
 
 def exe_path(arch):
-    return os.path.join(BUILD, 'votrax_gui-%s.exe' % arch)
+    return os.path.join(BUILD, 'votrax_native-%s.exe' % arch)
 
 
 def dll_path(arch):
-    return os.path.join(ADDON, 'votraxsc01-%s.dll' % arch)
+    return os.path.join(ADDON, 'votraxNative-%s.dll' % arch)
 
 
 def phones_from_text(lib, text):

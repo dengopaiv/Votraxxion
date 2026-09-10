@@ -1,4 +1,4 @@
-/* resource.h - control and resource identifiers for the Votrax SC-01 GUI. */
+/* resource.h - control and resource identifiers for the Votrax Native GUI. */
 
 #ifndef VOTRAX_GUI_RESOURCE_H
 #define VOTRAX_GUI_RESOURCE_H

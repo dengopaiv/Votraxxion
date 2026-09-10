@@ -34,8 +34,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 ROOT = Path(__file__).resolve().parent.parent
 GOLDEN = Path(__file__).resolve().parent / "data" / "golden.json"
 DLL = ROOT / "nvda-addon" / "addon" / "synthDrivers" / (
-    "votraxsc01-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8
-    else "votraxsc01-x86.dll"
+    "votraxNative-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8
+    else "votraxNative-x86.dll"
 )
 
 pytestmark = pytest.mark.skipif(

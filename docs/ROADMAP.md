@@ -55,6 +55,14 @@ SC-01 gets the SC-01 and nothing else — not a menu of chips, not the SC-02's
 tables riding along unused, not a 1970s rack synthesizer they never asked for.
 It reads the same in the other direction: an SC-02 add-on ships the SC-02.
 
+This one ships as **Votrax Native** — add-on id `votraxNative`, driver
+`synthDrivers/votraxNative.py`, libraries `votraxNative-x64.dll` and
+`votraxNative-x86.dll`, GUI `votrax_native-<arch>.exe`. “Native” is what
+separates it from the third-party `votraxsc01` add-on, which wraps MAME’s
+device and would otherwise collide with it in NVDA’s `synthDrivers`
+namespace; the chip it emulates is named in its summary, “Votrax Native
+(SC-01)”, which is where a second engine would be distinguished too.
+
 The place they stack is the Workbench GUI, and only there. Choosing which
 Votrax to render a sample with is exactly what a sound-design tool is for, so
 the GUI offers whichever engines are present as a choice, while every
@@ -152,7 +160,7 @@ stays in its own tree. See Phase 3.
   `timer_alloc<votrax_sc01_device>` lambda) show them to be MAME's C++ device
   lifted whole and wrapped in a `vx_*` C API, loading the two `.bin` dumps at
   runtime with a CRC check. Same lineage as our core, different construction.
-- `pyvotrax/_votrax_core.*.pyd`, `nvda-addon/addon/synthDrivers/votraxsc01-*.dll`
+- `pyvotrax/_votrax_core.*.pyd`, `nvda-addon/addon/synthDrivers/votraxNative-*.dll`
   — our own builds, source in this repository. Not disassembly targets.
 
 ### 1.5 Papers

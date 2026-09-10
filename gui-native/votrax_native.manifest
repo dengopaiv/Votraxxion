@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="Votrax.SC01.Gui" version="1.0.0.0"
+  <assemblyIdentity type="win32" name="Votrax.Native.Gui" version="1.0.0.0"
                     processorArchitecture="*"/>
-  <description>Votrax SC-01 Speech Synthesizer</description>
+  <description>Votrax Native - SC-01 Speech Synthesizer</description>
 
   <!-- Common Controls 6: without it the up-down controls and buttons are
        the Windows 95 versions, and the theme-aware accessibility path is

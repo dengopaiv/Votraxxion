@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the native Votrax SC-01 NVDA add-on.
+"""Build the Votrax Native NVDA add-on -- the SC-01, in C.
 
 The add-on is one Python file and one DLL per architecture — no bundled
 wheels, no dictionary, no ROM files. Everything the synthesizer needs is
@@ -7,7 +7,7 @@ compiled into the library.
 
     python package.py
 
-produces votraxsc01-<version>.nvda-addon, on the order of 300 KB.
+produces votraxNative-<version>.nvda-addon, on the order of 300 KB.
 
 NVDA 2026 is 64-bit only, so x64 is the build that matters and the one this
 script insists on. The x86 build ships alongside it for NVDA 2025 and earlier,
@@ -42,8 +42,8 @@ BUILD_DIR = os.path.join(ADDON_DIR, "build")
 #: (vcvars batch file, output DLL name, required). x64 is what NVDA 2026 runs;
 #: x86 serves NVDA 2025 and earlier and is nice to have, not essential.
 TARGETS = (
-    ("vcvars64.bat", "votraxsc01-x64.dll", True),
-    ("vcvars32.bat", "votraxsc01-x86.dll", False),
+    ("vcvars64.bat", "votraxNative-x64.dll", True),
+    ("vcvars32.bat", "votraxNative-x86.dll", False),
 )
 
 _VS_ROOTS = (
@@ -130,7 +130,7 @@ def addon_version():
 
 
 def build_addon(version):
-    output = os.path.join(ADDON_DIR, f"votraxsc01-{version}.nvda-addon")
+    output = os.path.join(ADDON_DIR, f"votraxNative-{version}.nvda-addon")
     if os.path.exists(output):
         os.remove(output)
 
@@ -151,7 +151,7 @@ def verify(output):
     synth — so check here rather than letting a user find out."""
     with zipfile.ZipFile(output) as zf:
         names = zf.namelist()
-    required = ["manifest.ini", "synthDrivers/votraxsc01.py"]
+    required = ["manifest.ini", "synthDrivers/votraxNative.py"]
     missing = [n for n in required if n not in names]
     dlls = [n for n in names if n.endswith(".dll")]
     if missing:

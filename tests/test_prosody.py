@@ -17,8 +17,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 DLL = ROOT / "nvda-addon" / "addon" / "synthDrivers" / (
-    "votraxsc01-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8
-    else "votraxsc01-x86.dll")
+    "votraxNative-x64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8
+    else "votraxNative-x86.dll")
 
 pytestmark = pytest.mark.skipif(
     not DLL.is_file(),

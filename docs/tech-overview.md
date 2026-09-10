@@ -799,13 +799,13 @@ while (i < n) {
 Building it, on Windows with MSVC:
 
 ```
-cl /std:c++17 /EHsc /O2 /LD /Icsrc /Fe:votraxsc01.dll csrc\votrax_capi.cpp
+cl /std:c++17 /EHsc /O2 /LD /Icsrc /Fe:votraxNative.dll csrc\votrax_capi.cpp
 ```
 
 and on anything else:
 
 ```
-c++ -std=c++17 -O2 -shared -fPIC -Icsrc -o libvotraxsc01.so csrc/votrax_capi.cpp
+c++ -std=c++17 -O2 -shared -fPIC -Icsrc -o libvotraxNative.so csrc/votrax_capi.cpp
 ```
 
 ### Known rough edges in the front end
@@ -892,12 +892,12 @@ roughly 40 MB.
 ```
 nvda-addon/
   manifest.ini
-  addon/synthDrivers/votraxsc01.py     the shim
+  addon/synthDrivers/votraxNative.py     the shim
   package.py                           builds both DLLs, zips the add-on
 ```
 
-NVDA 2026 is 64-bit only, so `votraxsc01-x64.dll` is the one that gets loaded.
-`votraxsc01-x86.dll` ships alongside it for NVDA 2025 and earlier, which ran as
+NVDA 2026 is 64-bit only, so `votraxNative-x64.dll` is the one that gets loaded.
+`votraxNative-x86.dll` ships alongside it for NVDA 2025 and earlier, which ran as
 32-bit processes; the driver chooses between them from the bitness of the
 process it finds itself in rather than from any NVDA version check, so one
 add-on serves both without knowing which it is running under.

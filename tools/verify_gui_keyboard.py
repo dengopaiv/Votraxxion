@@ -37,8 +37,8 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD = os.path.join(ROOT, 'gui-native', 'build')
-EXE = 'votrax_gui-{arch}.exe'
-WINDOW_CLASS = 'VotraxSC01MainWindow'
+EXE = 'votrax_native-{arch}.exe'
+WINDOW_CLASS = 'VotraxNativeMainWindow'
 
 WM_KEYDOWN, WM_KEYUP, WM_CLOSE, WM_GETDLGCODE = 0x0100, 0x0101, 0x0010, 0x0087
 VK_TAB, VK_SHIFT = 0x09, 0x10
