@@ -208,6 +208,10 @@ class SynthDriver(BaseSynthDriver):
 			return False
 
 	def __init__(self):
+		# Driver.__init__ is what registers the config save action;
+		# without it every setting on this driver is forgotten at the
+		# next restart.
+		super().__init__()
 		self._lib = _Lib.shared()
 		self._chip = None
 		self._player = None

@@ -19,7 +19,6 @@ itself if you are not already in a Developer Command Prompt; the sources are
 plain C11 and build under MinGW or clang just as well.
 """
 
-import configparser
 import os
 import shutil
 import subprocess
@@ -123,10 +122,53 @@ def build_dll(vcvars_name, output_name, required):
     return True
 
 
+#: Keys NVDA's manifest specification requires; everything else has a default.
+MANIFEST_REQUIRED = ("name", "summary", "author", "version")
+
+
+def read_manifest():
+    """Parse manifest.ini the way NVDA does, and refuse a file it would reject.
+
+    NVDA reads the manifest with ConfigObj against a specification whose keys
+    sit at the top level: there is no [addon] section. A section header buries
+    every key below where the specification looks, so the whole manifest
+    validates as missing and the add-on fails to install with nothing but
+    "failed" to go on. An unquoted value containing a comma fails the same way
+    for a different reason -- ConfigObj reads it as a list where the
+    specification wants a string. Neither mistake is visible by reading the
+    file, so check for both here rather than at the far end of a download.
+    """
+    values, errors = {}, []
+    with open(os.path.join(ADDON_DIR, "manifest.ini"), encoding="utf-8") as f:
+        for number, line in enumerate(f, 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("["):
+                errors.append(f"line {number}: {line} -- NVDA's manifest has no "
+                              "sections; every key sits at the top level")
+                continue
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip()
+            if "," in value and value[:1] not in ('"', "'"):
+                errors.append(f"line {number}: {key} contains a comma and is not "
+                              "quoted -- ConfigObj would read it as a list")
+            values[key] = value.strip('"').strip("'")
+    missing = [k for k in MANIFEST_REQUIRED if not values.get(k)]
+    if missing:
+        errors.append(f"missing required keys: {', '.join(missing)}")
+    if errors:
+        print("ERROR: manifest.ini is not one NVDA would accept:")
+        for error in errors:
+            print(f"  {error}")
+        sys.exit(1)
+    return values
+
+
 def addon_version():
-    parser = configparser.ConfigParser()
-    parser.read(os.path.join(ADDON_DIR, "manifest.ini"), encoding="utf-8")
-    return parser["addon"]["version"].strip()
+    return read_manifest()["version"]
 
 
 def build_addon(version):
