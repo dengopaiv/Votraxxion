@@ -31,7 +31,7 @@ from pathlib import Path
 
 # Matches nvda-addon/manifest.ini and the VERSIONINFO in
 # gui-native/votrax_native.rc. All three move together.
-VERSION = "1.0.1"
+VERSION = "1.1.0"
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
