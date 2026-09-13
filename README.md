@@ -194,6 +194,44 @@ keyboard trap in the multiline text box gets caught instead of argued about.
 
 `src/votrax.h` is the C API; `docs/tech-overview.md`, Part 4, has the details.
 
+### votrax-say, the command-line tool
+
+The quickest way to hear the chip, and the one that builds anywhere. CMake
+builds the synthesizer as a static library and `votrax-say` on top of it, with
+MSVC, GCC or Clang:
+
+```
+cmake -S . -B build/cmake
+cmake --build build/cmake --config Release
+```
+
+The executable lands in `build/cmake/Release/` with MSVC and in `build/cmake/`
+elsewhere. It carries the whole synthesizer and needs nothing beside it.
+
+```
+votrax-say "Hello world."                       text to votrax.wav
+votrax-say -o hi.wav --phones "H EH1 L O1 U1"   datasheet phone names
+votrax-say --spell "NVDA"                       letter by letter
+echo "From a pipe." | votrax-say -o pipe.wav    text from standard input
+votrax-say --print "Is this a question?"        the phones, with pitch levels
+votrax-say --table -o table.wav                 all 64 phones, timed
+votrax-say --names                              the phone table
+```
+
+Voice options: `--mask sc01a|sc01`, `--clock HZ` (200000–2000000), `--speed X`
+(tempo at constant pitch), `--inflection 0-3` and `--flat` (no sentence
+contour). `votrax-say --help` lists them all. Phone strings use the GUI's
+grammar — `NAME[:LEVEL]`, separated by spaces or commas — and `--print` writes
+that grammar, so its output can be edited and fed back through `--phones`.
+`--table` prints each phone's start time and length, so the WAV can be cut up
+or compared against the datasheet's Table 1.
+
+The Linux build was checked under WSL Debian with GCC 14: no warnings, and a
+WAV byte-identical to the Windows build's. `tests/test_cli.py` runs the tool
+once it is built.
+
+### The library on its own
+
 Windows, MSVC (from a Developer Command Prompt). Compile from inside `src/`:
 MSVC's `/Fo` will not take a quoted path ending in a backslash, so a repository
 path with a space in it breaks the obvious command line.
