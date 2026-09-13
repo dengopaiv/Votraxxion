@@ -42,9 +42,19 @@ class FakePlayer:
         self.stops = 0
         self.closed = False
         self.idled = 0
+        self.feeds = 0
+        self.fed_samples = 0
+        # A real player's feed() blocks while the audio plays; a delay here
+        # widens the window in which a cancel can land between a block being
+        # rendered and it being fed.
+        self.feed_delay = 0.0
 
     def feed(self, data):
+        self.feeds += 1
+        self.fed_samples += len(data) // 2
         self.data += data
+        if self.feed_delay:
+            time.sleep(self.feed_delay)
 
     def stop(self):
         self.stops += 1
@@ -318,3 +328,125 @@ class TestCancellation:
         driver.speak(["second utterance"])
         _drain(driver)
         assert len(driver._player.data) > 0
+
+
+def _peak(data):
+    samples = memoryview(bytes(data)).cast("h")
+    return max((abs(s) for s in samples), default=0)
+
+
+class TestCancelUnderLoad:
+    """The rapid-tabbing bug, with a player slow enough to hit its window.
+
+    NVDA cancels on every keystroke. If a block rendered before the cancel is
+    fed after it, that audio plays at the head of the next utterance -- heard
+    as a scrap of what was just interrupted. The feed-time epoch check is what
+    prevents it, and these tests are after the timing, not the logic, so the
+    player sleeps in feed() the way a real one blocks while audio plays.
+
+    Adapted from Tamas Geczy's driver_cancel_test.py in votraxsc01-nvda
+    (BSD-3-Clause), which pinned the same bug in the driver this one descends
+    from; see NOTICE.md.
+    """
+
+    def _feeds_after(self, d, settle):
+        before = d._player.feeds
+        time.sleep(settle)
+        return d._player.feeds - before
+
+    def test_cancel_mid_utterance_is_prompt_and_final(self, driver, driver_module):
+        done = driver_module._test_sdh.synthDoneSpeaking
+        driver._set_rate(0)                   # slowest: the widest window
+        driver._player.feed_delay = 0.02
+        _drain(driver)
+        done.calls.clear()
+        driver.speak(["This is a deliberately long and slow utterance that "
+                      "will be cancelled partway through, to check that "
+                      "nothing is fed afterwards."])
+        time.sleep(0.4)
+        t0 = time.perf_counter()
+        driver.cancel()
+        cancel_ms = (time.perf_counter() - t0) * 1000
+        assert cancel_ms < 150, "cancel took %.0f ms" % cancel_ms
+        # At most the block already inside feed() when cancel() ran.
+        assert self._feeds_after(driver, 0.5) <= 1
+        assert not done.calls, "reported done for a cancelled utterance"
+
+    def test_repeated_cancels_leave_nothing_behind(self, driver, driver_module):
+        driver._player.feed_delay = 0.008
+        stale = 0
+        for i in range(24):
+            driver.speak(["Utterance number %d which will be interrupted "
+                          "partway through." % i])
+            time.sleep(0.01 + (i % 7) * 0.010)
+            driver.cancel()
+            time.sleep(0.02)                  # let an in-flight feed return
+            stale += self._feeds_after(driver, 0.08)
+        assert stale == 0, "%d feed(s) landed after a cancel" % stale
+        assert driver._player.stops > 0
+
+        done = driver_module._test_sdh.synthDoneSpeaking
+        driver._player.feed_delay = 0.0
+        done.calls.clear()
+        driver.speak(["Speech works again after cancelling."])
+        _drain(driver)
+        deadline = time.monotonic() + 5
+        while not done.calls and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert done.calls, "no speech completed after the cancel storm"
+
+
+class TestChipSilence:
+    """A cancel must silence the chip, not just the player.
+
+    The SC-01 latches a phone and voices it to completion, so after the queue
+    is dropped the chip keeps producing the last phone. vx_cancel resets it;
+    without that the remainder is the first thing the next utterance renders.
+    Driven on the chip directly, with the speak thread stopped, so the test is
+    deterministic.
+    """
+
+    def test_cancel_silences_a_sounding_vowel(self, driver):
+        driver._queue.put(None)
+        driver._thread.join(2)
+        chip = driver._chip
+        block = int(chip.sample_rate * 0.012)
+
+        chip.speak(bytes([0x24, 0x24, 0x24]))      # AH, 250 ms each
+        hot = bytearray()
+        for _ in range(8):
+            hot += chip.render(block)
+        chip.cancel()
+        quiet = bytearray()
+        for _ in range(4):
+            quiet += chip.render(block)
+
+        assert _peak(hot) > 1000, "the vowel produced no sound"
+        assert _peak(quiet) < max(200, _peak(hot) // 8), \
+            "the cancelled phone is still sounding"
+        assert chip.pending() == 0
+
+
+class TestRateTempo:
+    """Rate is tempo at constant pitch: double speed, half the samples."""
+
+    def test_double_speed_halves_the_length(self, driver, driver_module):
+        driver._queue.put(None)
+        driver._thread.join(2)
+        phones = driver._lib.translate("testing one two three four")
+
+        def samples_at(rate):
+            driver._rate = rate
+            driver._authentic = False
+            driver._apply_rate()
+            driver._chip.cancel()
+            driver._player.fed_samples = 0
+            driver._feed(phones, driver._epoch)
+            return driver._player.fed_samples
+
+        natural = samples_at(50)              # speed 1.0
+        fast = samples_at(100)                # speed 2.0
+        assert natural > 0 and fast > 0
+        assert 0.4 < fast / natural < 0.65, \
+            "speed 2 gave %.2f of the natural length" % (fast / natural)
+        assert driver._chip._lib.vx_clock(driver._chip._chip) == 720000
