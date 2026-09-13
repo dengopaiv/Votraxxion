@@ -50,6 +50,14 @@ nothing here licenses them to anyone.
 They are not shipped. The synthesizer compiles its tables in, so neither the
 library nor the add-on carries a ROM file.
 
+## Votrax — the SC-01 data sheet
+
+`reference/SC-01_Data_Sheet_v1_text.pdf` is Votrax's data sheet for the chip,
+copyright Votrax 1980. It is redistributed under the grant printed on its first
+page: "Rights for the reproduction and distribution of the data contained
+herein are granted except for the manufacture and reproduction of the subject
+equipment." It is not shipped; see `reference/README.md`.
+
 ## Päiv Dengo — the work in this repository
 
 The C synthesizer's structure and scheduler (`src/votrax.c`, the rate and

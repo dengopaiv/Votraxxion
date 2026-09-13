@@ -44,3 +44,31 @@ divergences are listed in `docs/tech-overview.md`, Part 2, "Key differences
 from MAME".
 
 BSD-3-Clause, as MAME is.
+
+## `SC-01_Data_Sheet_v1_text.pdf`
+
+Votrax's own SC-01 data sheet (Troy, MI; copyright 1980), a scan with an OCR
+text layer. It is the manufacturer's statement of the chip's behaviour rather
+than an analysis of the die, so it is the one independent check on the
+numbers above. Pages 1–9 are the data sheet proper; page 10 is a later sheet
+of application circuits for the SC-01A. The copy has handwritten annotations
+(the phoneme-category letters in Table 1 and column notes) that are a
+previous owner's, not Votrax's.
+
+What in it bears on the synthesizer:
+
+- **Table 1** — the 64 phonemes with code, symbol and duration in ms at the
+  nominal 720 kHz clock; **Table 2** — the same phonemes by production
+  category (voiced, voiced fricative, voiced stop, fricative stop, fricative,
+  nasal, no sound).
+- The front-end rules under Table 1: T must precede CH, and D must precede J.
+- The master clock: nominally 720 kHz, `f ≈ 1.25 / RC`; Figures 6 and 7 show
+  voice variation by a potentiometer (6.8 kΩ + 50 kΩ audio taper, 120 pF on
+  page 10) and by DAC current injection.
+- I1/I2 set the pitch level of voiced phonemes instantaneously; A/R requests
+  may be ignored for external phoneme timing.
+- Figure 8 on page 10 — a reference output stage through an LM386.
+
+The sheet states: "Rights for the reproduction and distribution of the data
+contained herein are granted except for the manufacture and reproduction of
+the subject equipment."
