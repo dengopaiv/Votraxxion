@@ -323,8 +323,10 @@ truncation (with an "authentic rate" checkbox for the 1980 clock-scaling
 behaviour), and pitch quantised to the chip's four real inflection levels.
 
 It appears in NVDA’s synthesizer list as **Votrax Native (SC-01)**, under the
-add-on id `votraxNative` — distinct from the third-party `votraxsc01` add-on
-that wraps MAME’s device, so the two can be installed side by side.
+add-on id `votraxNative` — distinct from Tamas Geczy's `votraxsc01` add-on,
+which wraps MAME’s device, so the two can be installed side by side. The driver
+here descends from his, and the front end carries his phoneme map and exception
+dictionary; `NOTICE.md` says exactly what.
 
 `tests/test_nvda_driver.py` exercises the driver against stubbed NVDA modules,
 so the shim can be tested without a screen reader; it skips if the DLL has not

@@ -25,9 +25,13 @@ F2-noise injection filter, which MAME neutralizes and this does not — it is
 recorded in `docs/tech-overview.md`, Part 2, with the difference measured
 rather than asserted.
 
-## Tamas Geczy — the NVDA driver
+## Tamas Geczy — the NVDA driver, the phoneme map, the exception dictionary
 
-`nvda-addon/addon/synthDrivers/votraxNative.py` is derived from the driver in
+His work is in four places here, all from his `votraxsc01` NVDA add-on, which
+wraps MAME's SC-01 device: the driver, two front-end tables, the scheduler's
+rate and cancel design, and a handful of later fixes and tests.
+
+**The driver.** `nvda-addon/addon/synthDrivers/votraxNative.py` is derived from the driver in
 Geczy's `votraxsc01` NVDA add-on
 ([github.com/tgeczy/votraxsc01-nvda](https://github.com/tgeczy/votraxsc01-nvda)),
 version 1.0.2, which wraps MAME's SC-01 device. BSD-3-Clause, copyright holder
@@ -39,31 +43,65 @@ re-checked at the feed — the constant-pitch rate by phone truncation and the
 snapped onto the chip's four inflection levels, and the utterance close of
 STOP plus a rendered tail. Many of its comments survive word for word.
 
-What changed here: the chip, the ROM tables and the letter-to-sound engine
+What changed here: the chip, the ROM tables and the letter-to-sound matcher
 are this repository's native C rather than MAME's device and a ROM file, so
-the ROM search, migration and checksum are gone; phone truncation and
-cancellation moved into the C scheduler (`vx_speak`, `vx_cancel`); and the
-sentence contour is new. `tools/compare_reference.py` diffs this engine
-against his add-on's DLL. His notice is the second line of `LICENSE`.
+the ROM search, migration and checksum are gone; and the sentence contour is
+new.
 
-Two later borrowings from his repository, both recorded in `docs/REWRITE.md`:
-the corrected letter names for O, U and S (his changelog found them; the other
-four were found checking the rest), and the cancel-under-load, chip-silence and
-truncation-rate tests in `tests/test_nvda_driver.py`, adapted from his
-`tests/driver_cancel_test.py`.
+**The scheduler's design.** Rate by phone truncation, with the clock kept as
+"authentic rate", and the rule that a cancel must reset the chip rather than
+only drop the queue (his fix for the previous utterance leaking into the next)
+are his. Here they live in the C scheduler (`vx_set_speed`, `vx_speak`,
+`vx_cancel` in `src/votrax.c`), which works from the exact phone length rather
+than measuring each phone at startup; the implementation is ours.
 
-This credit was missing from release 1.1.0 and earlier; it was added on
+**Two front-end tables** in `src/ttv_tables.c`, first recovered from his
+`sc01.dll` and since checked entry for entry against his source:
+
+- `TTV_ARPABET` — his transcription (`arpabet_to_sc01.c`) of NRL Report 7948's
+  IPA-to-Votrax translation rules from the report's SNOBOL listing, with his
+  two documented repairs of typos that every surviving transcription shares.
+  The rules are public domain; the transcription is his. 81 entries, identical
+  and in the same order.
+- `TTV_EXCEPTIONS` — his exception dictionary (`exceptions.c`): respellings of
+  words he measured broken through the NRL rules and measured correct after.
+  17 entries, identical.
+
+The symbol normalization `src/ttv.c` applies before that map (upper-casing,
+`j` to `JH`, `NG` to `NX`) is the one his map expects.
+
+**Later fixes and tests**, recorded in `docs/REWRITE.md`: the corrected letter
+names for O, U and S (his changelog found them; H, Q, W and Y were found
+checking the rest); the cancel-under-load, chip-silence and truncation-rate
+tests in `tests/test_nvda_driver.py`, adapted from his
+`tests/driver_cancel_test.py`; and the modes of `votrax-say` (phone strings, the
+64-phone table, the name list), which follow his `say01` probe — the code is
+ours.
+
+`tools/compare_reference.py` diffs this engine against his add-on's DLL, and
+the ROM dumps in `reference/roms/` were extracted from his add-on (they are
+not his work, and are covered below). His notice is the second line of
+`LICENSE`, and the full repository is held locally at
+`reference repositories/votraxsc01-nvda`.
+
+This credit was missing from release 1.1.0 and earlier, and the tables were
+attributed there only to "a third-party NVDA driver"; it was added on
 2026-09-13.
 
-## US Naval Research Laboratory — the letter-to-sound rules
+## US Naval Research Laboratory and John A. Wasser — the letter-to-sound rules
 
-`src/ttv_tables.c` is the ruleset from Elovitz, Johnson, McHugh and Shore,
-*Automatic Translation of English Text to Phonetics by Means of Letter-to-Sound
-Rules*, NRL Report 7948 (1976). A work of the US Government, in the public
-domain. The arrangement follows John A. Wasser's 1985 public-domain C version,
-which is the shape the tables circulated in with Votrax-era hardware. The
-number reader in `src/ttv.c` follows the shape of his `saynum.c` from the same
-posting, with the departures listed in `docs/REWRITE.md`.
+The rules behind `src/ttv_tables.c` are from Elovitz, Johnson, McHugh and
+Shore, *Automatic Translation of English Text to Phonetics by Means of
+Letter-to-Sound Rules*, NRL Report 7948 (1976). A work of the US Government,
+in the public domain. That covers both stages: the letter-to-sound rules and
+the IPA-to-Votrax rules, whose transcription is Geczy's (above).
+
+`TTV_NRL_RULES` is John A. Wasser's 1985 public-domain `english.c`, the shape
+the rules circulated in with Votrax-era hardware: its 350 letter rules are
+identical and in order. `TTV_CARDINALS`, `TTV_ORDINALS`, `TTV_ASCII_NAMES`
+and `TTV_ABBREVIATIONS` are from his `saynum.c`, `spellword.c` and `parse.c`
+in the same posting. The number reader in `src/ttv.c` follows the shape of
+`saynum.c`, with the departures listed in `docs/REWRITE.md`.
 
 The punctuation timing is not theirs: NRL mapped every mark to a space,
 because it was a letter-to-sound algorithm with no opinions about timing. What
@@ -92,10 +130,11 @@ equipment." It is not shipped; see `reference/README.md`.
 
 ## Päiv Dengo — the work in this repository
 
-The C synthesizer's structure and scheduler (`src/votrax.c`, the rate and
-cancellation behaviour), the English front end (`src/ttv.c` and the
-arrangement of its tables), the flat C API, the changes to the NVDA driver
-described above, the native GUI,
+The C synthesizer's structure and the scheduler's implementation
+(`src/votrax.c`, with the rate and cancel design credited to Geczy above), the
+English front end's matcher, number reader and prosody (`src/ttv.c`; its
+tables are credited above), the flat C API, the changes to the NVDA driver
+described above, `votrax-say`, the native GUI,
 the verification tooling and the packaging. Written with Claude (Anthropic),
 session by session; the commit trailers record which.
 

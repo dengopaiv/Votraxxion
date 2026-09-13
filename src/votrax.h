@@ -7,7 +7,8 @@
  * and nothing else.
  *
  * Threading: a vx_chip is not internally locked.  The intended shape, and the
- * one the reference add-on uses, is that exactly one thread touches the chip
+ * one Tamas Geczy's votraxsc01 add-on uses (the driver in nvda-addon/ descends
+ * from it -- see NOTICE.md), is that exactly one thread touches the chip
  * after construction -- a speak thread that writes phones and pulls audio --
  * while the caller's thread only queues work for it.  ttv_translate and
  * ttv_spell touch no chip state at all and are reentrant.
@@ -115,6 +116,11 @@ VOTRAX_API int vx_get_inflection(vx_chip *chip);
  * still the chip's own output -- no resampling, no time-stretch artefacts.
  * Speeds below 1.0 extend instead, sustaining each phone past its natural end.
  *
+ * Rate by phone truncation, with the clock kept as an "authentic rate" option,
+ * is Geczy's design from his votraxsc01 NVDA driver, where it lived in Python
+ * and measured each phone at startup.  Here it is the scheduler, working from
+ * the exact phone length (vx_phone_samples).
+ *
  * The two compose: set a clock for the voice you want, then a speed for the
  * tempo you want. */
 
@@ -168,7 +174,10 @@ VOTRAX_API int vx_pending(vx_chip *chip);
  * to completion, so after a cancel it keeps producing the last phone it was
  * given.  If the next utterance simply renders on from there, that phone's
  * remainder comes out first and is heard as a scrap of the cancelled speech at
- * the head of the new one.  Resetting clears the interpolation state. */
+ * the head of the new one.  Resetting clears the interpolation state.
+ *
+ * Geczy diagnosed and fixed this in votraxsc01 1.0.2 (users heard it when
+ * tabbing quickly); vx_cancel is the same fix moved into the library. */
 VOTRAX_API void vx_cancel(vx_chip *chip);
 
 /* Render up to `count` mono 16-bit samples, committing queued phones as their

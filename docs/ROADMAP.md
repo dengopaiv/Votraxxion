@@ -58,7 +58,7 @@ It reads the same in the other direction: an SC-02 add-on ships the SC-02.
 This one ships as **Votrax Native** — add-on id `votraxNative`, driver
 `synthDrivers/votraxNative.py`, libraries `votraxNative-x64.dll` and
 `votraxNative-x86.dll`, GUI `votrax_native-<arch>.exe`. “Native” is what
-separates it from the third-party `votraxsc01` add-on, which wraps MAME’s
+separates it from Tamas Geczy's `votraxsc01` add-on, which wraps MAME’s
 device and would otherwise collide with it in NVDA’s `synthDrivers`
 namespace; the chip it emulates is named in its summary, “Votrax Native
 (SC-01)”, which is where a second engine would be distinguished too.
@@ -81,7 +81,7 @@ the same verification discipline, the same golden-diff tooling — not a binary.
 
 ### 1.1 Silicon: the SC-01 mask ROMs (verified this session)
 
-Two authentic 512-byte on-die mask ROM dumps, found inside a third-party NVDA
+Two authentic 512-byte on-die mask ROM dumps, found inside Tamas Geczy's NVDA
 add-on at `C:\GIT\speech synthesis\synthesizers for NVDA\formant\votraxsc01-1.0.2.nvda-addon.zip`:
 
 | File | Size | CRC32 | SHA-1 |
@@ -300,7 +300,7 @@ facts; 3 is the large one; 4 and 5 depend on 3.
 
 ### Phase 1 — Consolidate the evidence — **done, 2026-09-10**
 
-The ROM dumps lived inside a third-party add-on zip, and the script that
+The ROM dumps lived inside Geczy's add-on zip, and the script that
 verifies our tables against them lived in a temp directory. Both are here now.
 
 1. **`reference/roms/`** — `sc01.bin` and `sc01a.bin`, with a README recording
@@ -441,7 +441,7 @@ paper predicts (nasals, voiced fricatives, stop bursts).
 
 1. Extend `tools/goldens.py` to fingerprint any engine, not just the SC-01, so
    that two implementations of the *same* engine can be diffed
-   sample-for-sample — including the third-party `sc01-x64.dll`, which is
+   sample-for-sample — including Geczy's `sc01-x64.dll`, which is
    MAME's device wrapped in a C API and therefore an independent SC-01 to check
    ourselves against. That comparison is cheap and worth doing before any
    Ghidra work on it: if the audio matches, the disassembly tells us nothing we
@@ -500,7 +500,7 @@ Everything needed is installed; see `C:\GIT\environment\TOOLCHAIN.md`.
 4. Was the SC-02's filter bank actually the same silicon as the SC-01's, or a
    redesign? Every secondary source says "same analog core"; none of them cite
    a die. Tier C is the only real answer.
-5. ~~Does the third-party `sc01-x64.dll` produce bit-identical audio to ours?~~
+5. ~~Does Geczy's `sc01-x64.dll` produce bit-identical audio to ours?~~
    **Answered 2026-09-10: no, and the differences are worth having written
    down.** `tools/compare_reference.py` drives both through the same phones.
    Ten of 64 match exactly (the silent ones), ten within one LSB; every vowel

@@ -8,10 +8,11 @@
  *      english.c (1985) and shipped in Votrax-era products.  355 rules in 27
  *      groups: punctuation, then one group per letter A-Z.
  *
- *   2. ARPABET_TO_SC01 -- ARPABET to SC-01 phone names, context sensitive.
- *      This is the interesting half: it is tuned to the SC-01's actual phone
- *      inventory rather than to a general phoneme set.  Diphthongs are spelled
- *      out as two-phone glides (AY -> "AH E1"), affricates as stop+fricative
+ *   2. ARPABET_TO_SC01 -- ARPABET to SC-01 phone names, context sensitive:
+ *      NRL Report 7948's own "IPA to Votrax translation rules", as transcribed
+ *      by Tamas Geczy.  This is the interesting half: it is tuned to the
+ *      SC-01's actual phone inventory rather than to a general phoneme set.
+ *      Diphthongs are spelled out as two-phone glides (AY -> "AH E1"), affricates as stop+fricative
  *      (CH -> "T CH"), and vowels take an UH3 onglide or an I3/EH3 offglide
  *      next to liquids, which is how the chip's interpolator is coaxed into
  *      sounding like coarticulation.
@@ -36,10 +37,28 @@
  * boundary.  Left contexts are written in reverse reading order, so the
  * character nearest the cursor comes last.
  *
- * Provenance: recovered from the compiled tables of a third-party NVDA driver
- * (sc01.dll, 2026) and cross-checked against the published NRL ruleset.  The
- * NRL rules are a US Government work; Wasser's arrangement was placed in the
- * public domain.  Kept here as source so the synthesizer needs no dictionary,
+ * Provenance: recovered from the compiled tables of sc01.dll in Tamas Geczy's
+ * votraxsc01 NVDA add-on (2026, github.com/tgeczy/votraxsc01-nvda), and since
+ * checked entry for entry against his source.  Whose each table is:
+ *
+ *   NRL_RULES, CARDINALS, ORDINALS, ASCII_NAMES, ABBREVIATIONS
+ *       The NRL rules (a US Government work) and Wasser's english.c,
+ *       saynum.c, spellword.c and parse.c (1985, public domain), which Geczy
+ *       vendored byte-identical.  Seven ASCII_NAMES letters are corrected
+ *       here; three of those corrections are his.
+ *   ARPABET
+ *       Geczy's transcription of the NRL IPA-to-Votrax rules from the
+ *       report's SNOBOL listing (his arpabet_to_sc01.c), including his two
+ *       documented repairs of typos the surviving transcriptions share: the
+ *       unclosed bracket in L EY, and ER before L read as context rather than
+ *       consumed.  The rules are public domain; the transcription is
+ *       BSD-3-Clause, copyright tgeczy.  81 entries, identical and in order.
+ *   EXCEPTIONS
+ *       Geczy's exception dictionary (his exceptions.c): respellings he
+ *       measured broken through the rules and measured correct after.
+ *       BSD-3-Clause, copyright tgeczy.  17 entries, identical.
+ *
+ * See NOTICE.md.  Kept here as source so the synthesizer needs no dictionary,
  * no data file and no runtime download -- see docs/tech-overview.md, Part 4.
  */
 
@@ -536,8 +555,8 @@ const ttv_rule_group TTV_NRL_RULES[27] = {
 // adjacent ARPABET symbols; an empty string means "any".  `out` is a
 // space-separated list of SC-01 phone names (see TTV_PHONE_NAMES).
 //
-// A1/A2 note: the driver these strings were recovered from carries a phone
-// name table with A1 and A2 transposed, so its own lookup resolved the "A1"
+// A1/A2 note: Geczy's sc01.dll, which these strings were recovered from,
+// carries a phone name table with A1 and A2 transposed, so its own lookup resolved the "A1"
 // below to phone 0x05.  The ROM disagrees: within every vowel family a higher
 // digit is a shorter phone (EH3 19 < EH2 23 < EH1 38 < EH 58, and likewise for
 // I and UH), which makes 0x05 = A2 and 0x06 = A1 as the datasheet chart has
@@ -631,8 +650,9 @@ const ttv_arpa_map TTV_ARPABET[] = {
     { "",     "-",   "",     "PA1" },
 };
 
-// Words the rules get wrong, rewritten before the rules run.  Each pair is
-// {as written, as respelled}; the text is space-padded so the leading and
+// Words the rules get wrong, rewritten before the rules run -- Tamas Geczy's
+// measured exception dictionary (exceptions.c in votraxsc01-nvda,
+// BSD-3-Clause).  Each pair is {as written, as respelled}; the text is space-padded so the leading and
 // trailing blanks act as word boundaries.
 const char *const TTV_EXCEPTIONS[][2] = {
     { " SEARCH ",      " SURCH " },
@@ -772,7 +792,7 @@ const char *const TTV_CENT = "sEHnt";
 const char *const TTV_CENTS = "sEHnts";
 
 // The 64 SC-01 phone names, indexed by phone code.  Datasheet chart order;
-// note 0x05 = A2 and 0x06 = A1.  sc01.dll has those two swapped, which the
+// note 0x05 = A2 and 0x06 = A1.  Geczy's sc01.dll has those two swapped, which the
 // ROM's own duration fields disprove -- see docs/tech-overview.md, Part 4.
 const char *const TTV_PHONE_NAMES[64] = {
     "EH3",   "EH2",   "EH1",   "PA0",   "DT",    "A2",    "A1",    "ZH",   

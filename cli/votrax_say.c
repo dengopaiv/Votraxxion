@@ -13,6 +13,9 @@
  * The WAV header is written byte by byte, little-endian, so the output is the
  * same file on any host.
  *
+ * The modes -- phone strings, the whole 64-phone table, the name list -- follow
+ * Tamas Geczy's say01 probe in votraxsc01-nvda; the code is this repository's.
+ *
  * The phone grammar is the GUI's: NAME[:LEVEL] tokens separated by spaces or
  * commas, names from the datasheet (case-insensitive), levels 0-3 with the
  * neutral level when omitted.  --print emits exactly that grammar, so its

@@ -491,7 +491,7 @@ Key optimizations:
 
 The first row is the one that matters, and until 2026-09-10 nobody had put a
 number on it. `tools/compare_reference.py` drives this engine and an
-independent build of MAME's device — the one in the third-party
+independent build of MAME's device — the one in Tamas Geczy's
 `votraxsc01-1.0.2` add-on — through the same phones with identical hold times,
 and diffs the samples. On the SC-01-A mask:
 
@@ -616,25 +616,30 @@ works.
 
 ### Where the tables came from
 
-A third-party NVDA driver (`sc01.dll`, 2026) wrapped MAME's chip simulation and
-shipped a text-to-phoneme engine alongside it. The chip half was of no use to
-us — it *is* the emulator we are trying not to depend on — but the front-end
-half was pure data, and that data is now source in this repository. The
-binaries themselves have been removed; nothing at build or run time refers to
-them.
+Tamas Geczy's `votraxsc01` NVDA add-on (2026,
+[github.com/tgeczy/votraxsc01-nvda](https://github.com/tgeczy/votraxsc01-nvda))
+wraps MAME's chip simulation in `sc01.dll` and ships a text-to-phoneme engine
+alongside it. The chip half was of no use to us — it *is* the emulator we are
+trying not to depend on — but the front-end half was pure data, and that data
+is now source in this repository. The tables were first recovered from his
+compiled DLL; once his source was public they were checked against it entry for
+entry. The binaries themselves have been removed; nothing at build or run time
+refers to them.
 
-Four tables came out of it, plus the mask ROM dumps covered in Part 1:
+The tables, plus the mask ROM dumps covered in Part 1, and whose each is:
 
-| Table | Size | What it is |
-|---|---:|---|
-| `NRL_RULES` | 355 rules, 27 groups | English spelling → ARPABET |
-| `ARPABET_TO_SC01` | 81 entries | ARPABET → SC-01 phones, context sensitive |
-| `NRL_EXCEPTIONS` | 17 pairs | Respellings the rules get wrong |
-| `ABBREVIATIONS` | 3 pairs | Dr, Mr, Mrs |
-| `CARDINALS` / `ORDINALS` | 28 each | Number names |
-| `ASCII_NAMES` | 128 | Spoken name of every ASCII code |
+| Table | Size | What it is | Whose |
+|---|---:|---|---|
+| `NRL_RULES` | 355 rules, 27 groups | English spelling → ARPABET | NRL Report 7948 in Wasser's `english.c` (public domain); the 350 letter rules are identical and in order, the punctuation group is ours (`docs/REWRITE.md`) |
+| `ARPABET_TO_SC01` | 81 entries | ARPABET → SC-01 phones, context sensitive | NRL's IPA-to-Votrax rules (public domain) as **transcribed by Geczy**, with his two typo repairs (BSD-3-Clause) |
+| `NRL_EXCEPTIONS` | 17 pairs | Respellings the rules get wrong | **Geczy's measured exception dictionary** (BSD-3-Clause) |
+| `ABBREVIATIONS` | 3 pairs | Dr, Mr, Mrs | Wasser's `parse.c` |
+| `CARDINALS` / `ORDINALS` | 28 each | Number names | Wasser's `saynum.c` |
+| `ASCII_NAMES` | 128 | Spoken name of every ASCII code | Wasser's `spellword.c`; seven letter names corrected here, three of them following Geczy |
 
-Prosody and the phone scheduler are ours, not recovered — see below.
+The matcher, the number reader, prosody and the phone scheduler's
+implementation are ours, not recovered — see below. The scheduler's idea, rate
+by phone truncation, is Geczy's.
 
 The rules are the Naval Research Laboratory letter-to-sound set (Elovitz et
 al., NRL Report 7948, 1976) in the arrangement popularised by John A. Wasser's
@@ -670,7 +675,12 @@ reads as "a word boundary, then any run of consonants, immediately before ANY".
 
 This is the more interesting table, and the part with no equivalent anywhere
 else in the tree. It is not a dictionary lookup; it is tuned to what the SC-01
-can actually say.
+can actually say. The rules are the NRL report's own "IPA to Votrax
+translation rules" — its authors wrote them for Votrax hardware — and the
+transcription here is Tamas Geczy's, from the report's SNOBOL listing, with his
+repair of two typos every surviving transcription shares (an unclosed bracket in
+the `L EY` rule, and `ER` before `L` read as context rather than consuming the
+/l/ of "girl").
 
 The chip has no diphthongs, so the map spells them out as glides:
 
@@ -688,7 +698,7 @@ what they are articulatorily, and which the chip's own interpolator then smears
 into something convincing.
 
 Most of the table, though, is coarticulation around liquids, and this is the
-craft in it. A vowel before /l/ gets an offglide; a vowel after /l/ gets an
+NRL authors' craft. A vowel before /l/ gets an offglide; a vowel after /l/ gets an
 `UH3` onglide; a vowel before /r/ gets an `I3` or `EH3` offglide:
 
 | Context | Mapping |
@@ -988,7 +998,8 @@ update is two samples. Verified against all 64 phones on both masks. The
 `duration` field lives in word0, which is identical between the two mask
 revisions, so this does not vary with the voice.
 
-That closed form matters. The reference NVDA driver measured every phone
+That closed form matters. Geczy's NVDA driver, where rate by truncation
+originated, measured every phone
 empirically at startup — reset the chip, write the phone, render until it asks
 for the next, 64 times per voice — because it had no way to know the number in
 advance. We do, so there is no measurement pass at all.
@@ -1054,7 +1065,8 @@ if the setting is quantised to those four steps.
 ### Letter-to-sound references
 
 - **Elovitz, Johnson, McHugh & Shore, "Automatic Translation of English Text to Phonetics by Means of Letter-to-Sound Rules"** — NRL Report 7948, Naval Research Laboratory, 1976. The ruleset in `csrc/ttv_tables.h`. A US Government work.
-- **John A. Wasser, `english.c`** (1985) — the public-domain C arrangement of the NRL rules that circulated with Votrax-era hardware, and the shape the tables here follow (four fields per rule, one group per letter, most-specific-first).
+- **John A. Wasser, `english.c`** (1985) — the public-domain C arrangement of the NRL rules that circulated with Votrax-era hardware, and the shape the tables here follow (four fields per rule, one group per letter, most-specific-first). His `saynum.c`, `spellword.c` and `parse.c` from the same posting supply the number names, letter names and abbreviations, and the shape of the number reader.
+- **Tamas Geczy, `votraxsc01-nvda`** (2026, BSD-3-Clause) — https://github.com/tgeczy/votraxsc01-nvda. The NVDA driver this repository's driver descends from; the transcription of NRL's IPA-to-Votrax rules in `TTV_ARPABET`; the exception dictionary in `TTV_EXCEPTIONS`; rate by phone truncation; the cancel-must-reset-the-chip fix; three of the seven letter-name corrections. Held locally at `reference repositories/votraxsc01-nvda`.
 
 ### TTS pipeline references
 

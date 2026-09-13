@@ -1,4 +1,10 @@
-/* The English front end -- see ttv.h. */
+/* The English front end -- see ttv.h.
+ *
+ * The matcher, the number reader and the prosody are this repository's.  The
+ * tables they walk are described, with their authors, at the top of
+ * ttv_tables.c; the stage-two symbol normalization below (uppercasing, j -> JH,
+ * NG -> NX) is the one Tamas Geczy's arpabet_to_sc01.c applies before the same
+ * map, BSD-3-Clause, see NOTICE.md. */
 
 #include "ttv.h"
 

@@ -133,7 +133,9 @@ Licence
 BSD-3-Clause. The die analysis, the ROM transcription and the filter
 topologies are Olivier Galibert's work for MAME, and the attribution travels
 with anything derived from them. The NVDA driver is derived from Tamas
-Geczy's votraxsc01 add-on. See LICENSE.
+Geczy's votraxsc01 add-on, and the text front end carries his transcription
+of the NRL phoneme rules and his exception dictionary. See LICENSE and
+NOTICE.md.
 
 Checksums (SHA-256)
 -------------------

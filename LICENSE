@@ -8,11 +8,14 @@ All rights reserved.
 The first line is the upstream: the die analysis, the ROM transcription and
 the filter topologies this synthesizer is built on are Olivier Galibert's work
 for MAME, under these terms, and the notice travels with anything derived from
-them. The second is the NVDA driver's design: nvda-addon/addon/synthDrivers/
-votraxNative.py is derived from Tamas Geczy's votraxsc01 add-on, whose driver
-is under these terms too. The third is the work done in this repository on top
-of that -- the C synthesizer and scheduler, the English front end, the changes
-to the NVDA driver, the GUI and the tooling. All are under the same terms; see
+them. The second is Tamas Geczy's work in his votraxsc01 add-on, under these
+terms too: the NVDA driver nvda-addon/addon/synthDrivers/votraxNative.py is
+derived from his; src/ttv_tables.c carries his transcription of the NRL
+phoneme-to-Votrax rules and his exception dictionary; and the rate and cancel
+behaviour of the scheduler follow his design. The third is the work done in
+this repository on top of that -- the C synthesizer and scheduler, the
+matcher, number reader and prosody of the English front end, the changes to
+the NVDA driver, the GUI and the tooling. All are under the same terms; see
 NOTICE.md for which is which.
 
 Redistribution and use in source and binary forms, with or without

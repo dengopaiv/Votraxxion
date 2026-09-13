@@ -240,7 +240,7 @@ a seventh of what the reference implementation produces. Sentences ran into
 each other, and clause boundaries were audible only as a catch of breath. It
 reads as words being dropped, which is how it was reported.
 
-**How it was found.** Not by reading the tables. The third-party
+**How it was found.** Not by reading the tables. Tamas Geczy's
 `votraxsc01-1.0.2` add-on ships MAME's device wrapped in a `vx_*` C API and its
 own `ttv_translate`, so both front ends were driven over the same corpus and
 their phone histograms diffed. Ours never emitted PA1 once; the reference
