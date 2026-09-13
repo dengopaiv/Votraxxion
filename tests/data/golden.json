@@ -7,6 +7,31 @@
   1,
   "ad7facb2586fc6e966c004d7d1d16b02"
  ],
+ "datasheet": {
+  "clock_from_knob": [
+   1531863,
+   1319892,
+   918136,
+   467827,
+   183392
+  ],
+  "clock_from_rc": [
+   641026,
+   0
+  ],
+  "inflection_mid_phone": [
+   "0859034ece82a8ec7d9dae6c37539740",
+   "b65113081e48940dc6e51c3c07d98859"
+  ],
+  "output_0": [
+   0,
+   "60efd2f1ff29acacbd975a75211fe50a"
+  ],
+  "output_1": [
+   1,
+   "37fc9ef64f1b2e9604b664f55a09f636"
+  ]
+ },
  "inflection": [
   [
    0,
@@ -28,7 +53,7 @@
  "live_switch": [
   "af8827b5cab546b986e2730b2a06a0b2",
   "dbf43d0335c0c18604dc3acf7a6b1e08",
-  "af8827b5cab546b986e2730b2a06a0b2",
+  "1f294a9bb27951216335ed2f01fb75f9",
   1,
   900000,
   50000.0

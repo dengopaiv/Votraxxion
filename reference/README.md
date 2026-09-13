@@ -69,6 +69,9 @@ What in it bears on the synthesizer:
   may be ignored for external phoneme timing.
 - Figure 8 on page 10 — a reference output stage through an LM386.
 
+Each of these has been checked against the synthesizer or implemented in it,
+and `docs/DATASHEET.md` records which, how, and what was measured.
+
 The sheet states: "Rights for the reproduction and distribution of the data
 contained herein are granted except for the manufacture and reproduction of
 the subject equipment."

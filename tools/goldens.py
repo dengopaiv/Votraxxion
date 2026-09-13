@@ -78,6 +78,10 @@ def bind(path):
         "ttv_spell": ([ctypes.c_char_p, u8p, ctypes.c_int], ctypes.c_int),
         "vx_phone_name": ([ctypes.c_int], ctypes.c_char_p),
         "vx_phone_by_name": ([ctypes.c_char_p], ctypes.c_int),
+        "vx_clock_from_rc": ([ctypes.c_double, ctypes.c_double], ctypes.c_uint),
+        "vx_clock_from_knob": ([ctypes.c_double], ctypes.c_uint),
+        "vx_set_output": ([p, ctypes.c_int], None),
+        "vx_output": ([p], ctypes.c_int),
     }
     for name, (args, ret) in sigs.items():
         fn = getattr(lib, name)
@@ -216,6 +220,30 @@ def capture(path):
         render(lib, chip, 1)
     out["ready_at"] = ready_at
     lib.vx_destroy(chip)
+
+    # -- the data sheet: clock relation, live pitch, Figure 8 output ----------
+    ds = {}
+    ds["clock_from_rc"] = [lib.vx_clock_from_rc(6500.0, 300e-12),
+                           lib.vx_clock_from_rc(0.0, 1e-12)]
+    ds["clock_from_knob"] = [lib.vx_clock_from_knob(k / 4.0) for k in range(5)]
+    chip = lib.vx_create(0, 0)
+    lib.vx_write(chip, 0x24)                  # AH, the longest vowel
+    a = render(lib, chip, 3000)
+    lib.vx_inflection(chip, 3)                # mid-phone, as I1/I2 would
+    ds["inflection_mid_phone"] = [digest(a), digest(render(lib, chip, 3000))]
+    lib.vx_destroy(chip)
+    for stage in (0, 1):
+        chip = lib.vx_create(1, 0)
+        lib.vx_set_output(chip, stage)
+        phones = translate(lib.ttv_translate, CORPUS[0])
+        buf = (ctypes.c_ubyte * len(phones))(*phones)
+        lib.vx_speak(chip, buf, len(phones))
+        acc = hashlib.sha256()
+        while lib.vx_pending(chip):
+            acc.update(render(lib, chip, 512))
+        ds["output_%d" % stage] = [lib.vx_output(chip), acc.hexdigest()[:32]]
+        lib.vx_destroy(chip)
+    out["datasheet"] = ds
 
     return out
 

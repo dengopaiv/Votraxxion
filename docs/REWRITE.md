@@ -340,5 +340,26 @@ S, U, H or Y; and the thirty `speak_*` hashes, downstream of `translate`. No
 fingerprinted too.
 
 `tests/test_ttv_words.py` pins every case above by phone name, so a regression
-says what is heard rather than that a hash moved. `tools/verify_gui.py` still
+says what is heard rather than that a hash moved.
+
+---
+
+## Data sheet behaviour (2026-09-13)
+
+Not a front-end change, but golden output moved, so it is recorded here. Two
+API behaviours were brought into line with Votrax's 1980 data sheet
+(`docs/DATASHEET.md`, §5 and §8):
+
+- `vx_inflection` now changes the pitch of the phone already sounding, as the
+  I1/I2 pins do, instead of waiting for the next phone. No golden entry
+  moved, because every one sets the level before speaking.
+- `vx_set_clock` now retunes a talking chip instead of re-initialising it.
+  One entry moved: the third hash of `live_switch`, taken after a clock change
+  on a chip that had been talking. Before, that hash equalled the first — a
+  fresh chip at a different clock — which is the voiced-sound clock
+  invariance the data sheet work then measured directly.
+
+New, and fingerprinted under `datasheet`: `vx_clock_from_rc`,
+`vx_clock_from_knob`, the mid-phone inflection change, and both output stages.
+Every other entry is byte-identical. `tools/verify_gui.py` still
 reports the GUI executable and the library agreeing on all 21 cases.

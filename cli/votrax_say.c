@@ -42,6 +42,7 @@ typedef struct {
     int          inflection;
     int          flat;
     int          print_only;
+    int          output_stage;
 } options;
 
 static void usage(FILE *to)
@@ -60,10 +61,15 @@ static void usage(FILE *to)
         "\n"
         "voice:\n"
         "  --mask sc01a|sc01     mask revision (default sc01a)\n"
-        "  --clock HZ            master clock, 200000-2000000 (default 720000)\n"
+        "  --clock HZ            master clock, 100000-4000000 (default 720000)\n"
+        "  --knob P              clock from the data sheet's voice knob, 0-1\n"
+        "                        (0 fast and high, 1 slow and low, 720 kHz near 0.6)\n"
+        "  --rc OHMS,FARADS      clock from the MCRC parts, f = 1.25/RC\n"
         "  --speed X             tempo at constant pitch, 0.1-10 (default 1)\n"
         "  --inflection N        base pitch level 0-3 (default 1, neutral)\n"
         "  --flat                no sentence contour on text\n"
+        "  --output-stage S      chip (the AO pin, default) or figure8 (the\n"
+        "                        data sheet's LM386 amplifier into a speaker)\n"
         "\n"
         "output:\n"
         "  -o, --output FILE     WAV path (default votrax.wav)\n"
@@ -357,6 +363,7 @@ int main(int argc, char **argv)
     o.wav_path = "votrax.wav";
     o.mask = VX_MASK_SC01A;
     o.clock_hz = VX_BASE_CLOCK;
+    o.output_stage = VX_OUTPUT_CHIP;
     o.speed = 1.0;
     o.inflection = VX_NEUTRAL_INFLECTION;
 
@@ -383,9 +390,35 @@ int main(int argc, char **argv)
             else return fail("--mask is sc01a or sc01, not", next);
             i++;
         } else if (!strcmp(a, "--clock")) {
-            if (!next || !parse_double(next, 200000, 2000000, &v))
-                return fail("--clock wants 200000-2000000 Hz", next);
+            if (!next || !parse_double(next, 100000, 4000000, &v))
+                return fail("--clock wants 100000-4000000 Hz", next);
             o.clock_hz = (unsigned int)(v + 0.5);
+            i++;
+        } else if (!strcmp(a, "--knob")) {
+            if (!next || !parse_double(next, 0, 1, &v))
+                return fail("--knob wants a position from 0 to 1", next);
+            o.clock_hz = vx_clock_from_knob(v);
+            i++;
+        } else if (!strcmp(a, "--rc")) {
+            char *comma, *end;
+            double ohms, farads;
+            if (!next)
+                return fail("missing value for", a);
+            ohms = strtod(next, &comma);
+            if (comma == next || *comma != ',')
+                return fail("--rc wants OHMS,FARADS, e.g. 6800,120e-12", next);
+            farads = strtod(comma + 1, &end);
+            if (end == comma + 1 || *end)
+                return fail("--rc wants OHMS,FARADS, e.g. 6800,120e-12", next);
+            o.clock_hz = vx_clock_from_rc(ohms, farads);
+            if (o.clock_hz < 100000 || o.clock_hz > 4000000)
+                return fail("--rc gives a clock outside 100000-4000000 Hz", next);
+            i++;
+        } else if (!strcmp(a, "--output-stage")) {
+            if (!next) return fail("missing value for", a);
+            if (!strcmp(next, "chip")) o.output_stage = VX_OUTPUT_CHIP;
+            else if (!strcmp(next, "figure8")) o.output_stage = VX_OUTPUT_FIGURE8;
+            else return fail("--output-stage is chip or figure8, not", next);
             i++;
         } else if (!strcmp(a, "--speed")) {
             if (!next || !parse_double(next, 0.1, 10.0, &v))
@@ -461,6 +494,7 @@ int main(int argc, char **argv)
     }
     vx_set_speed(chip, o.speed);
     vx_inflection(chip, (unsigned char)o.inflection);
+    vx_set_output(chip, o.output_stage);
 
     if (!(o.mode == MODE_TABLE ? table(chip, &b, o.speed)
                                : speak(chip, phones, count, &b)))

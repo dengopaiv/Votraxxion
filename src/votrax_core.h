@@ -106,6 +106,23 @@ void vx_core_init(vx_core *c, double master_clock, double fx_fudge,
 /* Instant silence: clears interpolation state and re-latches STOP. */
 void vx_core_reset(vx_core *c);
 
+/* Move the master clock without touching the chip's state, the way turning
+ * the datasheet's Figure 6 potentiometer does while the chip is talking.
+ *
+ * Every filter is rebuilt for the new clock.  Most rebuild to the same
+ * coefficients: a switched-capacitor section's corner scales with the chip
+ * clock and the sample rate scales with it too, so their ratio -- all a
+ * digital filter sees -- is fixed.  Voiced sound is therefore sample-for-sample
+ * the same at every clock, and what the clock moves is how fast those samples
+ * play.  The exception is the noise shaper, which has the clock in a numerator
+ * (see votrax_filters.c), so fricatives also change colour with the clock. */
+void vx_core_set_clock(vx_core *c, double master_clock);
+
+/* The I1/I2 pins: "instantaneously sets pitch level of voiced phonemes"
+ * (datasheet, Signal Description).  Takes effect on the next pitch-counter
+ * comparison, not at the next phone. */
+void vx_core_set_inflection(vx_core *c, int inflection);
+
 /* Switch mask ROM.  Re-points the table; the phone being voiced keeps the
  * parameters it was committed with, so this takes effect from the next
  * commit. */

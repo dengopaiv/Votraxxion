@@ -73,8 +73,48 @@ VOTRAX_API void vx_reset(vx_chip *chip);
 
 /* --- configuration ------------------------------------------------------- */
 
+/* Change the master clock.  Live, as the data sheet's Figures 6 and 7 do it
+ * with a potentiometer or a DAC on the MCRC pin: the phone being voiced, the
+ * filter state and the queue all carry on.  Voiced sound is the same sample
+ * stream at every clock -- what moves is the rate it plays at, vx_sample_rate
+ * -- so a caller with a fixed-rate audio device must reopen it or resample.
+ * Fricative noise is the exception and changes colour with the clock too. */
 VOTRAX_API void vx_set_clock(vx_chip *chip, unsigned int hz);
 VOTRAX_API unsigned int vx_clock(vx_chip *chip);
+
+/* The data sheet's clock relation, "Frequency of Master Clock ~ 1.25 / RC"
+ * (Electrical Characteristics, note ***), for the resistor and capacitor on
+ * MCRC.  Returns Hz, or 0 if either value is not positive.  It is an
+ * approximation by the sheet's own sign: its typical parts, 6.5 k and 300 pF,
+ * give 641 kHz against the 720 kHz it names as typical. */
+VOTRAX_API unsigned int vx_clock_from_rc(double ohms, double farads);
+
+/* The voice knob from the data sheet's Figure 8 (page 10): a 6.8 k resistor in
+ * series with a 50 k audio-taper potentiometer, against 120 pF.  `position` is
+ * 0-1 along the track, 0 with the pot shorted (about 1.53 MHz, fast and high)
+ * and 1 at its full 50 k (about 183 kHz, slow and low).  The datasheet clock
+ * of 720 kHz sits near 0.6.  The taper law is the conventional audio one --
+ * 10% of the resistance at mid rotation -- because the sheet names the taper
+ * and not its law. */
+#define VX_KNOB_FIXED_OHMS 6800.0
+#define VX_KNOB_POT_OHMS   50000.0
+#define VX_KNOB_FARADS     120e-12
+VOTRAX_API unsigned int vx_clock_from_knob(double position);
+
+/* --- output stage --------------------------------------------------------
+ *
+ * VX_OUTPUT_CHIP is the AO pin as the chip drives it, which is what every
+ * other part of this library renders and what the goldens fingerprint.
+ * VX_OUTPUT_FIGURE8 passes it through the audio circuit of the data sheet's
+ * Figure 8 -- coupling capacitor, RC network, LM386 and output capacitor into
+ * an 8 ohm speaker -- modelled as a 27.6 Hz high-pass, a 1825 Hz low-pass and
+ * a 60.3 Hz high-pass, at the chip's own level.  It is the sound of the one
+ * board Votrax published, not of every product: the parts were the designer's
+ * choice.  The derivation from the scan is in votrax.c. */
+#define VX_OUTPUT_CHIP    0
+#define VX_OUTPUT_FIGURE8 1
+VOTRAX_API void vx_set_output(vx_chip *chip, int stage);
+VOTRAX_API int vx_output(vx_chip *chip);
 
 /* Output sample rate in Hz -- master clock / 18.  Changes with the clock, so
  * re-read it after vx_set_clock and re-open the audio device if it moved. */
@@ -92,6 +132,11 @@ VOTRAX_API int vx_mask(vx_chip *chip);
  * around it: the final level is base + packed - VX_NEUTRAL_INFLECTION, clamped
  * to 0-3.  So leaving it at the default of 1 reproduces ttv_translate's
  * contour exactly, and moving it transposes the whole contour.
+ *
+ * It takes effect at once, on the phone already sounding, because the I1/I2
+ * pins do: the data sheet says they "instantaneously set pitch level of voiced
+ * phonemes".  A phone the scheduler committed keeps its contour step, so a
+ * change mid-sentence transposes from that sample on.
  *
  * Note the consequence of having only four levels: at base 0 or 3 the contour
  * is clipped flat against the end of the range.  That is the hardware's limit,

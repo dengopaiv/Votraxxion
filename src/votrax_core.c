@@ -107,6 +107,20 @@ void vx_core_init(vx_core *c, double master_clock, double fx_fudge,
     vx_core_reset(c);
 }
 
+void vx_core_set_clock(vx_core *c, double master_clock)
+{
+    c->master_clock = master_clock;
+    c->sclock = vx_sclock_from_master(master_clock);
+    c->cclock = vx_cclock_from_master(master_clock);
+    build_fixed_filters(c);
+    build_variable_filters(c);
+}
+
+void vx_core_set_inflection(vx_core *c, int inflection)
+{
+    c->inflection = inflection & 0x03;
+}
+
 void vx_core_set_mask(vx_core *c, vx_mask_revision mask)
 {
     c->mask = mask;

@@ -115,9 +115,35 @@ def test_names_lists_the_datasheet(tmp_path):
     assert lines[0x3F].split() == ["3F", "STOP"]
 
 
+def test_knob_sets_the_clock_from_the_datasheet_circuit(tmp_path):
+    """Figure 8's 6.8 k + 50 k audio taper against 120 pF: position 0.6 is
+    within 2% of the datasheet's 720 kHz, and the WAV rate is clock / 18."""
+    out = tmp_path / "knob.wav"
+    assert run("-o", str(out), "--knob", "0.6", "test").returncode == 0
+    assert wav_info(out)[2] == pytest.approx(40000, rel=0.02)
+    ends = tmp_path / "ends.wav"
+    assert run("-o", str(ends), "--knob", "0", "test").returncode == 0
+    assert wav_info(ends)[2] == round(round(1.25 / (6800 * 120e-12)) / 18)
+
+
+def test_rc_uses_the_datasheet_relation(tmp_path):
+    out = tmp_path / "rc.wav"
+    assert run("-o", str(out), "--rc", "6500,300e-12", "test").returncode == 0
+    assert wav_info(out)[2] == round(round(1.25 / (6500 * 300e-12)) / 18)
+
+
+def test_figure8_output_stage_changes_the_audio_not_the_length(tmp_path):
+    chip, fig8 = tmp_path / "chip.wav", tmp_path / "fig8.wav"
+    assert run("-o", str(chip), "hello").returncode == 0
+    assert run("-o", str(fig8), "--output-stage", "figure8", "hello").returncode == 0
+    assert wav_info(chip) == wav_info(fig8)
+    assert chip.read_bytes() != fig8.read_bytes()
+
+
 @pytest.mark.parametrize("args", [
     ["--clock", "5"], ["--speed", "0"], ["--inflection", "4"],
-    ["--mask", "sc02"], ["--bogus"],
+    ["--mask", "sc02"], ["--bogus"], ["--knob", "1.5"], ["--rc", "6800"],
+    ["--rc", "5,5"], ["--output-stage", "radio"],
 ])
 def test_bad_options_fail_cleanly(args, tmp_path):
     r = run("-o", str(tmp_path / "x.wav"), *args, "text")

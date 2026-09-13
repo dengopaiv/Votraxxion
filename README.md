@@ -218,9 +218,13 @@ votrax-say --table -o table.wav                 all 64 phones, timed
 votrax-say --names                              the phone table
 ```
 
-Voice options: `--mask sc01a|sc01`, `--clock HZ` (200000–2000000), `--speed X`
+Voice options: `--mask sc01a|sc01`, `--clock HZ` (100000–4000000), `--speed X`
 (tempo at constant pitch), `--inflection 0-3` and `--flat` (no sentence
-contour). `votrax-say --help` lists them all. Phone strings use the GUI's
+contour). From the 1980 data sheet: `--knob P` sets the clock from its voice
+knob circuit (6.8 kΩ + 50 kΩ audio taper, 120 pF; 0.6 is the standard voice),
+`--rc OHMS,FARADS` from its `f ≈ 1.25/RC` relation, and `--output-stage figure8`
+plays the result through its LM386 speaker amplifier (see
+[docs/DATASHEET.md](docs/DATASHEET.md)). `votrax-say --help` lists them all. Phone strings use the GUI's
 grammar — `NAME[:LEVEL]`, separated by spaces or commas — and `--print` writes
 that grammar, so its output can be edited and fed back through `--phones`.
 `--table` prints each phone's start time and length, so the WAV can be cut up
