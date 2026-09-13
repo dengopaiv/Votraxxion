@@ -723,7 +723,17 @@ so any number under a thousand is two lookups. `ASCII_NAMES` is indexed by
 character code and covers all 128, including the control codes (`0` → "null",
 `13` → "carriage return") — which is exactly what a screen reader needs when it
 is asked to read a character rather than a word. The letter names for spell
-mode are the same table at `'A'`…`'Z'`.
+mode are the same table at `'A'`…`'Z'`; seven of them (H, O, Q, S, U, W, Y)
+were wrong as the table circulated and are corrected — see `docs/REWRITE.md`,
+"The licensed exception, used again".
+
+The number reader in `ttv.c` follows Wasser's `saynum.c` in shape: scales to
+billions, "and" before a remainder under a hundred, 1100–1999 read in hundreds
+("nineteen hundred eighty four"), and ordinals that put TH on the final word.
+On top of that it reads thousands separators ("1,000"), decimals and version
+strings ("one point two point three"), dollar amounts ("four dollars and twenty
+cents"), and treats a digit run with a leading zero or more than twelve digits
+as an identifier, read digit by digit.
 
 `ABBREVIATIONS` and `NRL_EXCEPTIONS` both run before the rules, as whole-word
 replacements on space-padded text. The abbreviations go first, so " DR " becomes
@@ -829,8 +839,8 @@ character as a boundary, which is what the rules plainly intend.
 
 Beyond those, the front end has the limits the 1976 ruleset has always had: it
 reads single letters as words (so "S C" comes out as sounds, not letter names —
-callers wanting letter names should use `ttv_spell`), and it handles numbers up
-to three digits as words and longer runs digit by digit.
+callers wanting letter names should use `ttv_spell`). Numbers are read by the
+reader described under "Numbers, symbols and spelling" above.
 
 ### Prosody
 

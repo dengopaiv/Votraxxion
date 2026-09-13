@@ -233,38 +233,237 @@ static void phone_put(ttv_ctx *x, uint8_t phone)
 
 /* ------------------------------------------------------------- stage one --- */
 
-/* Spell out a non-negative integer below 1000 using TTV_CARDINALS.  Longer
- * runs of digits are read digit by digit, which is what a screen reader wants
- * for things that are not really numbers -- version strings, IDs, phone
- * numbers. */
-static void append_number(ttv_ctx *x, const char *digits, int len)
-{
-    int value, i;
+/* ---------------------------------------------------------------- numbers --
+ *
+ * The shape is Wasser's saynum.c (1985, public domain), the reader that
+ * travelled with these rules: scales down to billions, "and" before a remainder
+ * under a hundred ("three thousand and five"), and 1100..1999 read in hundreds
+ * ("nineteen hundred eighty four"), which is how years and most four-digit
+ * figures are said aloud.  Ordinals put TH on whichever word ends the number.
+ *
+ * Where this departs from Wasser it is for a screen reader's sake, and each
+ * departure is in the reader below rather than here: a digit run with a
+ * leading zero or more than twelve digits is an identifier, not a quantity,
+ * and is read digit by digit; commas between groups of three are thousands
+ * separators; and any ST/ND/RD/TH suffix makes an ordinal, where Wasser
+ * matched the suffix against the last digit and so read "11th" as "eleven T
+ * H". */
 
-    if (len > 3) {
-        for (i = 0; i < len; i++)
-            arpa_say(x, TTV_CARDINALS[digits[i] - '0']);
-        return;
+#define TTV_NUMBER_DIGITS 12   /* longest run read as a quantity */
+
+static void say_scale(ttv_ctx *x, const char *word, int ordinal)
+{
+    arpa_puts(x, word);
+    if (ordinal)
+        arpa_puts(x, "TH");
+    arpa_putc(x, ' ');
+}
+
+/* A value below 10^12 as words; `ordinal` applies to the final word only. */
+static void say_number(ttv_ctx *x, unsigned long long value, int ordinal)
+{
+    static const struct { unsigned long long unit; const char *const *word; }
+        scales[] = { { 1000000000ULL, &TTV_BILLION },
+                     { 1000000ULL,    &TTV_MILLION } };
+    size_t i;
+
+    for (i = 0; i < sizeof scales / sizeof scales[0]; i++) {
+        if (value < scales[i].unit)
+            continue;
+        say_number(x, value / scales[i].unit, 0);
+        value %= scales[i].unit;
+        say_scale(x, *scales[i].word, ordinal && value == 0);
+        if (value == 0)
+            return;
+        if (value < 100)
+            arpa_say(x, TTV_AND);
     }
 
-    value = 0;
-    for (i = 0; i < len; i++)
-        value = value * 10 + (digits[i] - '0');
+    if ((value >= 1000 && value <= 1099) || value >= 2000) {
+        say_number(x, value / 1000, 0);
+        value %= 1000;
+        say_scale(x, TTV_THOUSAND, ordinal && value == 0);
+        if (value == 0)
+            return;
+        if (value < 100)
+            arpa_say(x, TTV_AND);
+    }
 
-    if (value >= 100) {
+    if (value >= 100) {            /* up to 19, for 1100..1999 */
         arpa_say(x, TTV_CARDINALS[value / 100]);
-        arpa_say(x, "hAHndrEHd");
         value %= 100;
+        say_scale(x, TTV_HUNDRED, ordinal && value == 0);
         if (value == 0)
             return;
     }
-    if (value < 20) {
-        arpa_say(x, TTV_CARDINALS[value]);
-    } else {
-        arpa_say(x, TTV_CARDINALS[18 + value / 10]);   /* 20 -> 20, 30 -> 21 */
-        if (value % 10)
-            arpa_say(x, TTV_CARDINALS[value % 10]);
+
+    if (value >= 20) {             /* [20] is twenty, [21] thirty ... */
+        int tens = 18 + (int)(value / 10);
+        value %= 10;
+        if (value == 0) {
+            arpa_say(x, ordinal ? TTV_ORDINALS[tens] : TTV_CARDINALS[tens]);
+            return;
+        }
+        arpa_say(x, TTV_CARDINALS[tens]);
     }
+
+    arpa_say(x, ordinal ? TTV_ORDINALS[value] : TTV_CARDINALS[value]);
+}
+
+static void say_digits(ttv_ctx *x, const char *digits, int len)
+{
+    int i;
+    for (i = 0; i < len; i++)
+        arpa_say(x, TTV_CARDINALS[digits[i] - '0']);
+}
+
+/* The integer part of a number starting at `pos`: a digit run, plus any
+ * ",ddd" groups that follow it when the run could lead a thousands-separated
+ * figure.  "1,000" joins; "1,2,3" and "12,34" stay a list.  The digits are
+ * copied into `digits` (separators dropped) and the end position returned. */
+static int scan_integer(const ttv_ctx *x, int pos, int n,
+                        char *digits, int *len, int cap)
+{
+    int end = pos, count = 0;
+
+    while (end < n && is_digit(x->text[end])) {
+        if (count < cap)
+            digits[count] = x->text[end];
+        count++;
+        end++;
+    }
+    if (count <= 3) {
+        while (end + 3 < n && x->text[end] == ',' &&
+               is_digit(x->text[end + 1]) && is_digit(x->text[end + 2]) &&
+               is_digit(x->text[end + 3]) &&
+               !(end + 4 < n && is_digit(x->text[end + 4]))) {
+            int k;
+            for (k = 1; k <= 3; k++) {
+                if (count < cap)
+                    digits[count] = x->text[end + k];
+                count++;
+            }
+            end += 4;
+        }
+    }
+    *len = count;
+    return end;
+}
+
+/* Is this run a quantity, and if so what is it?  Leading zeros and over-long
+ * runs are identifiers -- a part number, a phone number, "007" -- and read
+ * digit by digit. */
+static int as_quantity(const char *digits, int len, unsigned long long *value)
+{
+    int i;
+    if (len > TTV_NUMBER_DIGITS || (len > 1 && digits[0] == '0'))
+        return 0;
+    *value = 0;
+    for (i = 0; i < len; i++)
+        *value = *value * 10 + (unsigned long long)(digits[i] - '0');
+    return 1;
+}
+
+static int is_ordinal_suffix(const ttv_ctx *x, int end, int n)
+{
+    char a, b;
+    if (end + 1 >= n)
+        return 0;
+    a = x->text[end];
+    b = x->text[end + 1];
+    if (!((a == 'S' && b == 'T') || (a == 'N' && b == 'D') ||
+          (a == 'R' && b == 'D') || (a == 'T' && b == 'H')))
+        return 0;
+    return end + 2 >= n || is_boundary(x->text[end + 2]);
+}
+
+/* ".5", ".2.3": each point and the digits after it, digit by digit.  Repeating
+ * is what reads a version string -- "one point two point three" -- and it is
+ * also what stops the full stop reaching the rules, where it is a sentence
+ * pause. */
+static int say_fraction(ttv_ctx *x, int end, int n)
+{
+    while (end + 1 < n && x->text[end] == '.' && is_digit(x->text[end + 1])) {
+        arpa_say(x, TTV_POINT);
+        end++;
+        while (end < n && is_digit(x->text[end]))
+            arpa_say(x, TTV_CARDINALS[x->text[end++] - '0']);
+    }
+    return end;
+}
+
+/* A number at `pos`: cardinal, ordinal, decimal or identifier. */
+static int read_number(ttv_ctx *x, int pos, int n)
+{
+    char digits[TTV_NUMBER_DIGITS + 1];
+    unsigned long long value;
+    int len;
+    int end = scan_integer(x, pos, n, digits, &len, TTV_NUMBER_DIGITS + 1);
+
+    if (!as_quantity(digits, len, &value)) {
+        if (len > TTV_NUMBER_DIGITS) {
+            /* Too long to have been copied; read it from the text instead,
+             * skipping any separators the scan joined. */
+            int i;
+            for (i = pos; i < end; i++)
+                if (is_digit(x->text[i]))
+                    arpa_say(x, TTV_CARDINALS[x->text[i] - '0']);
+        } else {
+            say_digits(x, digits, len);
+        }
+        return say_fraction(x, end, n);
+    }
+
+    if (is_ordinal_suffix(x, end, n)) {
+        say_number(x, value, 1);
+        return end + 2;
+    }
+    say_number(x, value, 0);
+    return say_fraction(x, end, n);
+}
+
+/* "$5", "$1,200", "$4.20", "$0.99": dollars, and cents when the fraction is
+ * exactly two digits.  Any other fraction is read as a decimal before the
+ * currency word ("$1.5" is one point five dollars).  `pos` is at the '$'. */
+static int read_money(ttv_ctx *x, int pos, int n)
+{
+    char digits[TTV_NUMBER_DIGITS + 1];
+    unsigned long long dollars = 0, cents = 0;
+    int len, end, has_cents = 0;
+
+    end = scan_integer(x, pos + 1, n, digits, &len, TTV_NUMBER_DIGITS + 1);
+    if (len > TTV_NUMBER_DIGITS || !as_quantity(digits, len, &dollars)) {
+        /* "$007" is not an amount anyone says; read the digits. */
+        return read_number(x, pos + 1, n);
+    }
+
+    if (end + 2 < n && x->text[end] == '.' &&
+        is_digit(x->text[end + 1]) && is_digit(x->text[end + 2]) &&
+        !(end + 3 < n && is_digit(x->text[end + 3]))) {
+        cents = (unsigned long long)((x->text[end + 1] - '0') * 10 +
+                                     (x->text[end + 2] - '0'));
+        has_cents = 1;
+    }
+
+    if (has_cents) {
+        if (dollars > 0 || cents == 0) {
+            say_number(x, dollars, 0);
+            arpa_say(x, dollars == 1 ? TTV_DOLLAR : TTV_DOLLARS);
+        }
+        if (cents > 0) {
+            if (dollars > 0)
+                arpa_say(x, TTV_AND);
+            say_number(x, cents, 0);
+            arpa_say(x, cents == 1 ? TTV_CENT : TTV_CENTS);
+        }
+        return end + 3;
+    }
+
+    say_number(x, dollars, 0);
+    len = end;
+    end = say_fraction(x, end, n);
+    arpa_say(x, dollars == 1 && end == len ? TTV_DOLLAR : TTV_DOLLARS);
+    return end;
 }
 
 /* Replace every occurrence of `from` with `to`, in place.
@@ -352,11 +551,11 @@ static void to_arpabet(ttv_ctx *x, const char *text, int len)
         int matched = 0;
 
         if (is_digit(c)) {
-            int end = pos;
-            while (end < n && is_digit(x->text[end]))
-                end++;
-            append_number(x, x->text + pos, end - pos);
-            pos = end;
+            pos = read_number(x, pos, n);
+            continue;
+        }
+        if (c == '$' && pos + 1 < n && is_digit(x->text[pos + 1])) {
+            pos = read_money(x, pos, n);
             continue;
         }
 

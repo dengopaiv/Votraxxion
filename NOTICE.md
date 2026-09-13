@@ -46,6 +46,12 @@ cancellation moved into the C scheduler (`vx_speak`, `vx_cancel`); and the
 sentence contour is new. `tools/compare_reference.py` diffs this engine
 against his add-on's DLL. His notice is the second line of `LICENSE`.
 
+Two later borrowings from his repository, both recorded in `docs/REWRITE.md`:
+the corrected letter names for O, U and S (his changelog found them; the other
+four were found checking the rest), and the cancel-under-load, chip-silence and
+truncation-rate tests in `tests/test_nvda_driver.py`, adapted from his
+`tests/driver_cancel_test.py`.
+
 This credit was missing from release 1.1.0 and earlier; it was added on
 2026-09-13.
 
@@ -55,7 +61,9 @@ This credit was missing from release 1.1.0 and earlier; it was added on
 *Automatic Translation of English Text to Phonetics by Means of Letter-to-Sound
 Rules*, NRL Report 7948 (1976). A work of the US Government, in the public
 domain. The arrangement follows John A. Wasser's 1985 public-domain C version,
-which is the shape the tables circulated in with Votrax-era hardware.
+which is the shape the tables circulated in with Votrax-era hardware. The
+number reader in `src/ttv.c` follows the shape of his `saynum.c` from the same
+posting, with the departures listed in `docs/REWRITE.md`.
 
 The punctuation timing is not theirs: NRL mapped every mark to a space,
 because it was a letter-to-sound algorithm with no opinions about timing. What

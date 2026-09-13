@@ -715,15 +715,15 @@ const char *const TTV_ASCII_NAMES[128] = {
     /*  66 */ "bIY",                         /*  67 */ "sIY",
     /*  68 */ "dIY",                         /*  69 */ "IY",
     /*  70 */ "EHf",                         /*  71 */ "jIY",
-    /*  72 */ "EYtCH",                       /*  73 */ "AY",
+    /*  72 */ "EYCH",                        /*  73 */ "AY",
     /*  74 */ "jEY",                         /*  75 */ "kEY",
     /*  76 */ "EHl",                         /*  77 */ "EHm",
-    /*  78 */ "EHn",                         /*  79 */ "AA",
-    /*  80 */ "pIY",                         /*  81 */ "kw",
-    /*  82 */ "AAr",                         /*  83 */ "EHz",
-    /*  84 */ "tIY",                         /*  85 */ "AHw",
-    /*  86 */ "vIY",                         /*  87 */ "dAHblyUWw",
-    /*  88 */ "EHks",                        /*  89 */ "wAYIY",
+    /*  78 */ "EHn",                         /*  79 */ "OW",
+    /*  80 */ "pIY",                         /*  81 */ "kyUW",
+    /*  82 */ "AAr",                         /*  83 */ "EHs",
+    /*  84 */ "tIY",                         /*  85 */ "yUW",
+    /*  86 */ "vIY",                         /*  87 */ "dAHblyUW",
+    /*  88 */ "EHks",                        /*  89 */ "wAY",
     /*  90 */ "zIY",                         /*  91 */ "lEHft brAEkEHt",
     /*  92 */ "bAEkslAESH",                  /*  93 */ "rAYt brAEkEHt",
     /*  94 */ "kAErEHt",                     /*  95 */ "AHndERskAOr",
@@ -731,15 +731,15 @@ const char *const TTV_ASCII_NAMES[128] = {
     /*  98 */ "bIY",                         /*  99 */ "sIY",
     /* 100 */ "dIY",                         /* 101 */ "IY",
     /* 102 */ "EHf",                         /* 103 */ "jIY",
-    /* 104 */ "EYtCH",                       /* 105 */ "AY",
+    /* 104 */ "EYCH",                        /* 105 */ "AY",
     /* 106 */ "jEY",                         /* 107 */ "kEY",
     /* 108 */ "EHl",                         /* 109 */ "EHm",
-    /* 110 */ "EHn",                         /* 111 */ "AA",
-    /* 112 */ "pIY",                         /* 113 */ "kw",
-    /* 114 */ "AAr",                         /* 115 */ "EHz",
-    /* 116 */ "tIY",                         /* 117 */ "AHw",
-    /* 118 */ "vIY",                         /* 119 */ "dAHblyUWw",
-    /* 120 */ "EHks",                        /* 121 */ "wAYIY",
+    /* 110 */ "EHn",                         /* 111 */ "OW",
+    /* 112 */ "pIY",                         /* 113 */ "kyUW",
+    /* 114 */ "AAr",                         /* 115 */ "EHs",
+    /* 116 */ "tIY",                         /* 117 */ "yUW",
+    /* 118 */ "vIY",                         /* 119 */ "dAHblyUW",
+    /* 120 */ "EHks",                        /* 121 */ "wAY",
     /* 122 */ "zIY",                         /* 123 */ "lEHft brEYs",
     /* 124 */ "vERtIHkAXl bAAr",             /* 125 */ "rAYt brEYs",
     /* 126 */ "tAYld",                       /* 127 */ "dEHl",
@@ -755,12 +755,18 @@ const char *const TTV_ABBREVIATIONS[][2] = {
     { " MRS ",  " MISSUS " },
 };
 
-// Words for reading amounts and decimals, as ARPABET.  A currency reader wants
-// all six: "$4.20" is DOLLARS[0] .. POINT .. or "four dollars and twenty
-// cents" depending on how chatty the caller wants to be.
+// Scale words, spelled as Wasser's 1985 saynum.c spells them (public domain).
+// An ordinal appends TH to whichever of these ends the number.
+const char *const TTV_HUNDRED = "hAHndrEHd";
+const char *const TTV_THOUSAND = "THAWzAEnd";
+const char *const TTV_MILLION = "mIHlIYAXn";
+const char *const TTV_BILLION = "bIHlIYAXn";
+
+// Words for reading amounts and decimals, as ARPABET: "3.14" is three POINT
+// one four, "$4.20" is four DOLLARS AND twenty CENTS.
 const char *const TTV_POINT = "pOYnt";
 const char *const TTV_DOLLAR = "dAAlER";
-const char *const TTV_DOLLARS = "dAAlAArz";
+const char *const TTV_DOLLARS = "dAAlERz";
 const char *const TTV_AND = "AAnd";
 const char *const TTV_CENT = "sEHnt";
 const char *const TTV_CENTS = "sEHnts";

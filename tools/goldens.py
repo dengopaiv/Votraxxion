@@ -35,6 +35,7 @@ CORPUS = (
     "Dr. Smith has 3 cats and 1024 reasons.",
     "Section 7, paragraph 12.",
     "young thing, judge the hedge",
+    "Pay $4.20 by the 21st: version 1.2.3, 1,000,000 or 007.",
 )
 
 #: Speeds either side of 1.0, including ones whose sample arithmetic does not

@@ -268,3 +268,77 @@ one of them downstream of the front end. No DSP entry moved, which is the
 check that this stayed where it was meant to. The fingerprint was re-blessed
 against the corrected output, deliberately, which is what this section exists
 to record.
+
+---
+
+## The licensed exception, used again: letter names and numbers (2026-09-13)
+
+A second deliberate change to `ttv_*` output, in two parts. Both came out of
+studying Tamas Geczy's `votraxsc01-nvda` repository (v1.0.2, `d520be9`, cloned
+to `reference repositories/votraxsc01-nvda`), which had fixed three letter
+names and reads numbers with Wasser's full `saynum.c`.
+
+### Letter names
+
+`TTV_ASCII_NAMES` is the name table as it circulated with Wasser's
+`spellword.c`, and some of its entries are not names. Geczy's changelog named
+O, U and S. Every letter was then spelled through our DLL and read back as
+phone names (`ttv_spell` + `vx_phone_name`), which found four more:
+
+| Letter | Was (ARPABET → phones) | Heard as | Now |
+|---|---|---|---|
+| H | `EYtCH` → A AY T T CH | a doubled T | `EYCH` → A AY T CH |
+| O | `AA` → AH | "ah" | `OW` → O1 U1 |
+| Q | `kw` → K W | "kw" | `kyUW` → K Y1 IU U |
+| S | `EHz` → EH Z | "ezz", voiced | `EHs` → EH S |
+| U | `AHw` → UH W | "uh-w" | `yUW` → Y1 IU U |
+| W | `dAHblyUWw` → … U W | "double-you-w" | `dAHblyUW` |
+| Y | `wAYIY` → W AH E1 E | "why-ee" | `wAY` → W AH E1 |
+
+The H is a stage-two effect worth knowing: the ARPABET map already spells `CH`
+as T CH, so writing `tCH` in the table doubles the stop. Upper- and lower-case
+rows are fixed together. This matters more than its size suggests, because
+NVDA spells a letter on every character-review keystroke.
+
+### Numbers
+
+Before, a run of up to three digits was read as a number and anything longer
+digit by digit, on the theory that long runs are identifiers. That read
+"1984" as "one nine eight four" and "1,000" as "one, zero zero zero" — the
+comma a pause — and "3.14" as "three", a full-stop pause, "fourteen".
+
+Now `ttv.c` has a number reader in the shape of Wasser's `saynum.c` (1985,
+public domain): scales to billions, "and" before a remainder under a hundred,
+1100–1999 in hundreds, and ordinals with TH on the final word. It departs from
+Wasser in four places, each for a screen reader:
+
+- **Identifiers stay digit by digit** — a leading zero ("007") or more than
+  twelve digits. Twelve is the most `unsigned long long` arithmetic needs no
+  special care for, and a longer run is not a quantity anyone says aloud.
+- **Thousands separators join** — a run of one to three digits followed by
+  `,ddd` groups is one number. "1,2,3" and "12,34" stay lists.
+- **Any ST/ND/RD/TH suffix makes an ordinal.** Wasser matched the suffix
+  against the last digit, so "11th" came out "eleven T H".
+- **Decimals and versions.** Each `.digit` is "point" and the digits one by
+  one, repeated, so "1.2.3" is "one point two point three" and the full stop
+  never reaches the rules as a sentence pause.
+
+Dollar amounts use the currency words that were already in the tables, unused:
+"$4.20" is "four dollars and twenty cents", "$1" singular, "$1.5" "one point
+five dollars". `TTV_DOLLARS` was `dAAlAArz` ("dollahrs") and is now `dAAlERz`,
+matching `TTV_DOLLAR`.
+
+### What it cost
+
+`tests/data/golden.json` was re-blessed. Before the corpus was extended, the
+diff was checked entry by entry: `translate` and `translate_flat` moved only
+for "Dr. Smith has 3 cats and 1024 reasons." (1024 is now "one thousand and
+twenty four"); `spell` moved for its three sentences, all of which contain O,
+S, U, H or Y; and the thirty `speak_*` hashes, downstream of `translate`. No
+`phones_mask*` entry moved — the DSP is untouched. The corpus then gained
+"Pay $4.20 by the 21st: version 1.2.3, 1,000,000 or 007." so the new reader is
+fingerprinted too.
+
+`tests/test_ttv_words.py` pins every case above by phone name, so a regression
+says what is heard rather than that a hash moved. `tools/verify_gui.py` still
+reports the GUI executable and the library agreeing on all 21 cases.

@@ -65,9 +65,12 @@ extern const char *const TTV_PHONE_NAMES[64];
  * code is out of range.  Valid for the life of the program; do not free. */
 const char *ttv_phone_name(int code);
 
-/* Staged for a currency and ordinal reader the front end does not have yet.
- * Kept with the tables so that whoever writes it does not have to invent the
- * pronunciations again. */
+/* The words the number reader in ttv.c adds around the cardinals: the scale
+ * names, the decimal point, and the currency words. */
+extern const char *const TTV_HUNDRED;
+extern const char *const TTV_THOUSAND;
+extern const char *const TTV_MILLION;
+extern const char *const TTV_BILLION;
 extern const char *const TTV_POINT;
 extern const char *const TTV_DOLLAR;
 extern const char *const TTV_DOLLARS;
