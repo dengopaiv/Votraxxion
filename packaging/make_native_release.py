@@ -132,7 +132,8 @@ Licence
 
 BSD-3-Clause. The die analysis, the ROM transcription and the filter
 topologies are Olivier Galibert's work for MAME, and the attribution travels
-with anything derived from them. See LICENSE.
+with anything derived from them. The NVDA driver is derived from Tamas
+Geczy's votraxsc01 add-on. See LICENSE.
 
 Checksums (SHA-256)
 -------------------

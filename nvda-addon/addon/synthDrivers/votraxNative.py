@@ -1,4 +1,8 @@
 # license:BSD-3-Clause
+# copyright-holders:tgeczy, Päiv Dengo
+#
+# Derived from the driver in Tamas Geczy's votraxsc01 NVDA add-on
+# (https://github.com/tgeczy/votraxsc01-nvda); see NOTICE.md.
 """NVDA synth driver for the Votrax SC-01, over the native synthesizer.
 
 The whole synthesizer — both mask ROMs, the letter-to-sound rules, the phone

@@ -25,6 +25,30 @@ F2-noise injection filter, which MAME neutralizes and this does not — it is
 recorded in `docs/tech-overview.md`, Part 2, with the difference measured
 rather than asserted.
 
+## Tamas Geczy — the NVDA driver
+
+`nvda-addon/addon/synthDrivers/votraxNative.py` is derived from the driver in
+Geczy's `votraxsc01` NVDA add-on
+([github.com/tgeczy/votraxsc01-nvda](https://github.com/tgeczy/votraxsc01-nvda)),
+version 1.0.2, which wraps MAME's SC-01 device. BSD-3-Clause, copyright holder
+tgeczy. What came from it: the shape of the driver — one speak thread that
+alone touches the chip, a queue of work items, cancellation by epoch counter
+with control items exempt, audio fed in ~12 ms blocks with the epoch
+re-checked at the feed — the constant-pitch rate by phone truncation and the
+"Authentic rate" setting that makes rate the master clock, the pitch setting
+snapped onto the chip's four inflection levels, and the utterance close of
+STOP plus a rendered tail. Many of its comments survive word for word.
+
+What changed here: the chip, the ROM tables and the letter-to-sound engine
+are this repository's native C rather than MAME's device and a ROM file, so
+the ROM search, migration and checksum are gone; phone truncation and
+cancellation moved into the C scheduler (`vx_speak`, `vx_cancel`); and the
+sentence contour is new. `tools/compare_reference.py` diffs this engine
+against his add-on's DLL. His notice is the second line of `LICENSE`.
+
+This credit was missing from release 1.1.0 and earlier; it was added on
+2026-09-13.
+
 ## US Naval Research Laboratory — the letter-to-sound rules
 
 `src/ttv_tables.c` is the ruleset from Elovitz, Johnson, McHugh and Shore,
@@ -62,7 +86,8 @@ equipment." It is not shipped; see `reference/README.md`.
 
 The C synthesizer's structure and scheduler (`src/votrax.c`, the rate and
 cancellation behaviour), the English front end (`src/ttv.c` and the
-arrangement of its tables), the flat C API, the NVDA driver, the native GUI,
+arrangement of its tables), the flat C API, the changes to the NVDA driver
+described above, the native GUI,
 the verification tooling and the packaging. Written with Claude (Anthropic),
 session by session; the commit trailers record which.
 
