@@ -6,10 +6,13 @@ came from is worth nothing if the source is only in a commit message.
 
 ## `roms/`
 
-The two dumped 512-byte mask ROMs, `sc01.bin` and `sc01a.bin` — the only
-material here that is the chip itself rather than someone's reading of it.
-`tools/verify_rom.py` checks every transcription below against them, and the
-test suite runs that check. See `roms/README.md`.
+Where the two dumped 512-byte mask ROMs, `sc01.bin` and `sc01a.bin`, go if you
+have them — the only material that is the chip itself rather than someone's
+reading of it. **They are not in the repository** and must not be committed;
+`roms/README.md` says why, and how to supply your own. With them,
+`tools/verify_rom.py` checks every transcription below against the silicon, and
+the test suite runs that check; without them it checks the transcriptions
+against each other.
 
 ## `gate-sim/`
 
@@ -22,7 +25,8 @@ die photographs of the part (published at
 into the twelve phoneme parameters. `src/votrax_rom.c` carries the same numbers
 and the same extraction, and `py_emu/rom.py` a third copy in Python — three
 independent transcriptions that agree, which is why the tables can be trusted.
-All three agree with `roms/sc01a.bin` as well, row for row, which is why they
+All three agree with the SC-01-A dump as well, row for row — checked on
+2026-09-10 and on every run where the dumps are supplied — which is why they
 can be trusted against the chip rather than just against each other.
 
 The rest (`blocks.cc`, `sched.cc`, `sram.cc`, `vsim.cc`, `state.h`) simulate

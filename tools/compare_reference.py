@@ -10,8 +10,10 @@ takes the mask ROM as a buffer:
 
 `votraxsc01-1.0.2.nvda-addon` (Tamas Geczy) ships one, which is where this
 was developed. That binary is not vendored here -- it is somebody else's
-build of somebody else's code -- so its path is an argument. The ROMs
-default to `reference/roms/`, which are the same files it ships.
+build of somebody else's code -- so its path is an argument. Its engine
+needs the mask ROM dumps, which are not in this repository: the ROM folder
+is the second argument, else VOTRAX_ROM_DIR, else `reference/roms/` if you
+have placed your own copies there (see its README).
 
 **Its variant numbering is the inverse of ours.** There, 0 is the 1980
 SC-01 and 1 is the SC-01-A; here `VX_MASK_SC01A` is 0. Getting that
@@ -47,7 +49,7 @@ import goldens  # noqa: E402
 
 OURS = os.path.join(ROOT, 'nvda-addon', 'addon', 'synthDrivers',
                     'votraxNative-x64.dll')
-DEFAULT_ROMS = os.path.join(ROOT, 'reference', 'roms')
+DEFAULT_ROMS = os.environ.get('VOTRAX_ROM_DIR') or os.path.join(ROOT, 'reference', 'roms')
 
 HOLD = 8000          # samples held per phone, identical for both engines
 TAIL = 4000
@@ -225,6 +227,11 @@ def main(argv):
         return 2
     if not os.path.isfile(OURS):
         print('build ours first: python nvda-addon/package.py')
+        return 2
+    if not all(os.path.isfile(os.path.join(rom_dir, n)) for n in ('sc01.bin', 'sc01a.bin')):
+        print('the reference engine needs the mask ROM dumps, which are not in this '
+              'repository; pass their folder or set VOTRAX_ROM_DIR '
+              '(see reference/roms/README.md). Looked in: %s' % rom_dir)
         return 2
 
     probe = Ours(0)

@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """Check every transcription of the SC-01 mask ROM against the silicon.
 
-The phoneme tables in this repository exist four times: as the die transcription
-in `reference/gate-sim/rom.cc`, as C arrays in `src/votrax_rom.c`, as Python
-tuples in `py_emu/rom.py`, and -- the only one of the four that is not somebody
-typing numbers off a photograph -- as the two dumped 512-byte mask ROMs in
-`reference/roms/`. Three transcriptions that agree is the reason the tables can
-be trusted; agreeing with the *dump* is the reason they can be trusted against
-the chip.
+The phoneme tables in this repository exist three times: as the die
+transcription in `reference/gate-sim/rom.cc`, as C arrays in
+`src/votrax_rom.c`, and as Python tuples in `py_emu/rom.py`. Three
+transcriptions that agree is the reason the tables can be trusted; agreeing
+with the two dumped 512-byte mask ROMs is the reason they can be trusted
+against the chip.
 
-This checks all of it, from the checked-in text rather than from anything that
-has to be built or imported, so it works on a clean tree with no extension
-compiled:
+The dumps are not in this repository and must not be: they are the contents
+of a commercial chip, not anyone's work here, and their copyright is uncleared
+(see reference/roms/README.md). Supply your own copies of the standard MAME
+files -- in reference/roms/, where .gitignore keeps them out of commits, or in
+any folder named by the VOTRAX_ROM_DIR environment variable. Without them this
+checks the three transcriptions against each other and says that it did not
+check them against the silicon.
+
+It works from the checked-in text rather than from anything that has to be
+built or imported, so it runs on a clean tree with no extension compiled:
 
     python tools/verify_rom.py           # report; exit 1 on any mismatch
     python tools/verify_rom.py -v        # also print the decoded mask delta
@@ -27,6 +33,7 @@ from __future__ import annotations
 
 import binascii
 import hashlib
+import os
 import re
 import struct
 import sys
@@ -42,7 +49,14 @@ DUMPS = {
     "sc01": ("528d1c57", "268b5884dce04e49e2376df3e2dc82e852b708c1"),
 }
 
-ROM_DIR = ROOT / "reference" / "roms"
+#: Where the dumps are looked for: VOTRAX_ROM_DIR if set, else reference/roms/.
+ROM_DIR = Path(os.environ["VOTRAX_ROM_DIR"]) if os.environ.get("VOTRAX_ROM_DIR") \
+    else ROOT / "reference" / "roms"
+
+
+def dumps_available() -> bool:
+    """True when both dumps have been supplied."""
+    return all((ROM_DIR / f"{name}.bin").is_file() for name in DUMPS)
 
 #: The twelve parameters a phone's two words decode to, in slot order.
 PARAM_FIELDS = ("f1", "va", "f2", "fc", "f2q", "f3", "fa",
@@ -201,8 +215,30 @@ def mask_delta() -> dict[int, dict[str, tuple[int, int]]]:
 
 # --- the check ------------------------------------------------------------
 
+def transcriptions_agree() -> list[str]:
+    """The three transcriptions against each other, with no dump needed."""
+    c_rows, c_deltas = c_tables()
+    py_rows, py_deltas = py_emu_tables()
+    gate = gate_sim_table()
+    for source, rows in (("py_emu/rom.py", py_rows), ("reference/gate-sim/rom.cc", gate)):
+        bad = [i for i in range(64) if rows[i] != c_rows[i]]
+        if bad:
+            raise VerifyError(f"{source} disagrees with src/votrax_rom.c at "
+                              f"{len(bad)} phone(s); first is {bad[0]:#04x}")
+    if py_deltas != c_deltas:
+        raise VerifyError("py_emu/rom.py and src/votrax_rom.c disagree on the SC-01 deltas")
+    return ["src/votrax_rom.c, py_emu/rom.py, reference/gate-sim/rom.cc: "
+            "64/64 rows agree with each other",
+            f"SC-01 delta tables agree: {len(c_deltas)} rows"]
+
+
 def cross_check() -> list[str]:
-    """Run every check. Returns the report lines; raises VerifyError on failure."""
+    """Run every check. Returns the report lines; raises VerifyError on failure.
+
+    Without the dumps, only the transcriptions are compared with each other."""
+    if not dumps_available():
+        return transcriptions_agree() + [
+            f"dumps not supplied in {ROM_DIR}: NOT checked against the silicon"]
     lines: list[str] = []
 
     for name, (want_crc, want_sha) in DUMPS.items():
@@ -272,13 +308,17 @@ def main(argv: list[str]) -> int:
     except VerifyError as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
-    if verbose:
+    if verbose and dumps_available():
         print()
         print("phone   SC-01-A va   SC-01 va")
         for phone, moved in sorted(mask_delta().items()):
             a, o = moved["va"]
             print(f"  {phone:02X}      {a:>2}          {o:>2}")
-    print("\nOK: every transcription agrees with the silicon.")
+    if dumps_available():
+        print("\nOK: every transcription agrees with the silicon.")
+    else:
+        print("\nOK: the transcriptions agree with each other. Supply the dumps "
+              "(reference/roms/README.md) to check them against the silicon.")
     return 0
 
 

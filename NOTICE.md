@@ -79,8 +79,8 @@ tests in `tests/test_nvda_driver.py`, adapted from his
 ours.
 
 `tools/compare_reference.py` diffs this engine against his add-on's DLL, and
-the ROM dumps in `reference/roms/` were extracted from his add-on (they are
-not his work, and are covered below). His notice is the second line of
+the ROM dumps this repository was verified against were extracted from his
+add-on (they are not his work, and are covered below). His notice is the second line of
 `LICENSE`, and the full repository is held locally at
 `reference repositories/votraxsc01-nvda`.
 
@@ -110,15 +110,17 @@ a comma is worth here is a decision made in this repository, recorded in
 
 ## The mask ROMs
 
-`reference/roms/sc01.bin` and `sc01a.bin` are the contents of a commercial
-integrated circuit whose maker stopped producing it in the late 1980s. They
-are the standard dumps, archived openly in MAME and elsewhere, and they are
-kept here as reference material with their provenance written down —
-`reference/roms/README.md`. No claim of ownership is made over them and
-nothing here licenses them to anyone.
+The two 512-byte mask ROM dumps, `sc01.bin` and `sc01a.bin`, are the contents
+of a commercial integrated circuit whose maker stopped producing it in the late
+1980s. They are **not in this repository**, and they were removed from its
+entire history on 2026-09-13: they are not anyone's work here, and their
+copyright is uncleared. `reference/roms/README.md` gives their hashes and says
+how to supply your own for the checks that use them. No claim of ownership is
+made over them and nothing here licenses them to anyone.
 
-They are not shipped. The synthesizer compiles its tables in, so neither the
-library nor the add-on carries a ROM file.
+They are not shipped either. The synthesizer compiles in the phoneme tables of
+`src/votrax_rom.c`, which are Galibert's die transcription (BSD-3, above), so
+neither the library nor the add-on carries a ROM file.
 
 ## Votrax — the SC-01 data sheet
 

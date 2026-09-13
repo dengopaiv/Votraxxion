@@ -305,7 +305,10 @@ verifies our tables against them lived in a temp directory. Both are here now.
 
 1. **`reference/roms/`** — `sc01.bin` and `sc01a.bin`, with a README recording
    the hashes, the row format, the content-addressing, where the files came
-   from and why nothing builds against them.
+   from and why nothing builds against them. *(2026-09-13: the two dumps were
+   removed from the repository and its history, as uncleared material that is
+   not ours to publish; the README now says how to supply your own, and the
+   checks below run against a private copy.)*
 2. **`tools/verify_rom.py`** — decodes both dumps and cross-checks
    `src/votrax_rom.c`, `py_emu/rom.py` and `reference/gate-sim/rom.cc` row by
    row, then the twelve-row SC-01 delta, then that the delta touches `va` and

@@ -46,7 +46,7 @@ what lets the NVDA add-on be 142 KB.
 | `tools/goldens.py` | Fingerprints a library's entire observable output so two implementations can be diffed sample-for-sample. Its committed output is `tests/data/golden.json`. | a built library |
 | `tools/verify_gui.py`, `tools/verify_gui_keyboard.py` | Check the built GUI executable rather than a harness that shares its sources: the audio against the library over ctypes, and the tab order against the real window with posted keypresses. | a built GUI |
 | `tests/test_datasheet.py`, `docs/DATASHEET.md` | The synthesizer against Votrax's 1980 data sheet: Table 1 durations, Table 2 categories in the ROM, the affricate rule, live inflection, the clock relation and knob, live clock changes and the Figure 8 output stage. | a built library |
-| `tools/verify_rom.py` | Checks all three ROM transcriptions against the dumps in `reference/roms/`. Runs inside the test suite too. | nothing |
+| `tools/verify_rom.py` | Checks the three ROM transcriptions against each other, and against the mask ROM dumps when you supply them (they are not in the repository; see `reference/roms/README.md`). Runs inside the test suite too. | nothing; the dumps optional |
 | `tools/compare_reference.py` | Diffs this engine against an independent build of MAME's device (the DLL in Tamas Geczy's `votraxsc01` add-on): audio per phone, phone-end timing, and which phones each front end ever emits. Takes the reference DLL as an argument; it is not vendored. | a reference DLL |
 | `reference/` | Galibert's gate-level simulator and MAME's `votrax.cpp`. Provenance, not code we build. | nothing |
 | `packaging/`, `presets/` | PyInstaller spec, Inno Setup script and factory presets for the Workbench. | `pyvotrax/` |

@@ -8,7 +8,10 @@ deliberate.
 TestAgainstTheDumps closes the loop the rest of the file cannot: every other
 test here compares one transcription of the ROM against another, and two
 transcriptions of the same typo agree perfectly. Those tests check the dumped
-mask ROMs in reference/roms/ instead, so the ground truth is the silicon.
+mask ROMs instead, so the ground truth is the silicon. The dumps are not in
+the repository (reference/roms/README.md says how to supply them), so that
+class skips without them; the transcriptions are still checked against each
+other.
 """
 
 import sys
@@ -89,6 +92,13 @@ class TestBackendsAgree:
                 assert a[field] == getattr(b, field), (i, field)
 
 
+def test_transcriptions_agree_with_each_other():
+    """Runs with or without the dumps."""
+    verify_rom.transcriptions_agree()
+
+
+@pytest.mark.skipif(not verify_rom.dumps_available(),
+                    reason="mask ROM dumps not supplied - see reference/roms/README.md")
 class TestAgainstTheDumps:
     """The checked-in tables, against the two 512-byte mask ROM dumps."""
 
