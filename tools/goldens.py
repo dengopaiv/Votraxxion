@@ -82,6 +82,8 @@ def bind(path):
         "vx_clock_from_knob": ([ctypes.c_double], ctypes.c_uint),
         "vx_set_output": ([p, ctypes.c_int], None),
         "vx_output": ([p], ctypes.c_int),
+        "vx_set_output_volume": ([p, ctypes.c_double], None),
+        "vx_output_volume": ([p], ctypes.c_double),
     }
     for name, (args, ret) in sigs.items():
         fn = getattr(lib, name)
@@ -232,16 +234,19 @@ def capture(path):
     lib.vx_inflection(chip, 3)                # mid-phone, as I1/I2 would
     ds["inflection_mid_phone"] = [digest(a), digest(render(lib, chip, 3000))]
     lib.vx_destroy(chip)
-    for stage in (0, 1):
+    for key, stage, volume in (("output_0", 0, 1.0), ("output_1", 1, 1.0),
+                               ("output_1_vol08", 1, 0.8)):
         chip = lib.vx_create(1, 0)
         lib.vx_set_output(chip, stage)
+        lib.vx_set_output_volume(chip, volume)
         phones = translate(lib.ttv_translate, CORPUS[0])
         buf = (ctypes.c_ubyte * len(phones))(*phones)
         lib.vx_speak(chip, buf, len(phones))
         acc = hashlib.sha256()
         while lib.vx_pending(chip):
             acc.update(render(lib, chip, 512))
-        ds["output_%d" % stage] = [lib.vx_output(chip), acc.hexdigest()[:32]]
+        ds[key] = [lib.vx_output(chip), round(lib.vx_output_volume(chip), 9),
+                   acc.hexdigest()[:32]]
         lib.vx_destroy(chip)
     out["datasheet"] = ds
 

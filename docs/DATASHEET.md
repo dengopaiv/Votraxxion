@@ -12,6 +12,9 @@ the sheet says, what was done with it, how that was checked, and where the check
 now lives. The tests are in `tests/test_datasheet.py` and, for the command-line
 options, `tests/test_cli.py`.
 
+A second data sheet is used for the amplifier in Figure 8: Texas Instruments'
+LM386 (SNAS545D). It is not redistributed; §10 lists what was taken from it.
+
 | # | Data sheet | Status |
 |---|---|---|
 | 1 | Table 1: codes, symbols, durations | **Confirmed**, every phone; a small unexplained offset recorded |
@@ -23,7 +26,7 @@ options, `tests/test_cli.py`.
 | 7 | Figure 6/8 voice knob | **Implemented** as `vx_clock_from_knob` |
 | 8 | Figures 6/7: vary the clock while speaking | **Implemented**: a clock change used to reset the chip |
 | 9 | Lower clock: lower pitch, longer phonemes | **Confirmed** |
-| 10 | Figure 8 audio circuit | **Implemented** as an optional output stage |
+| 10 | Figure 8 audio circuit, with TI's LM386 data sheet | **Implemented** as an optional output stage with its volume control; the circuit clips the 1980 mask's open vowels |
 | 11 | External timing (ignoring A/R) | Already present: that is what `vx_set_speed` does |
 | — | Pin-out, electrical limits, bus timing | Not applicable to an emulation |
 
@@ -242,63 +245,152 @@ phoneme timing lengthens."
 sample rate is the clock over 18, so halving the clock doubles every duration and
 halves every frequency. **Test:** `test_lower_clock_lengthens_phonemes`.
 
-## 10. The Figure 8 audio circuit — implemented
+## 10. The Figure 8 audio circuit, with the LM386 — implemented
 
 **The sheet:** Figure 8 on page 10, "Typical Application", is the only complete
 audio path Votrax drew. It was read at 300 dpi (`pdftoppm -r 300`, cropped):
 
 ```
-AO (22) ─┤1 µF├─ 4.7 k ─┬─ 0.05 µF ─ ground
-                         └─ 10 k audio-taper pot ─ ground
-                               wiper ─┬─ 1.2 k ─ ground
-                                      ├─ 0.05 µF ─ pin 2 (ground)
-                                      └─ LM386N-1 pin 3, gain 20
-                                            out ─┤330 µF├─ 8 Ω speaker
+AO (22) ─┤1 µF├─ R1 4.7 k ─A─┬─ C1 0.05 µF ─ ground
+                              └─ 10 k audio-taper volume pot
+                                    A ─ Rt ─ wiper W ─ Rb ─ ground,  Rt + Rb = 10 k
+                              W ─┬─ 1.2 k ─ ground
+                                 ├─ C2 0.05 µF ─ pin 2 (ground)
+                                 └─ LM386N-1 pin 3, pins 1 and 8 open
+                                       out ─┤330 µF├─ 8 Ω speaker          Vp = 12 V
 AF (21) ─ 4.7 k ─ ground
 ```
 
 The 1 µF line appears to cross the 6.8 k clock resistor's lead. The scan draws a
 hop there, not a dot, so the two are not connected, and the clock network is fed
-from Vp as Figure 6 shows.
+from Vp as Figure 6 shows. The note beside the figure gives the supply: "5 V
+supply to be raised last and lowered before or at same time as Vp (12 V)".
 
-**Implemented:** `vx_set_output(chip, VX_OUTPUT_FIGURE8)`, three first-order
-sections after the chip, with the volume at full so the wiper sits on the top
-node:
+### The amplifier: TI's LM386 data sheet
 
-| Section | Parts | Corner |
-|---|---|---:|
-| input coupling | 1 µF into 4.7 k + (10 k ∥ 1.2 k) | high-pass 27.6 Hz |
-| RC network | (4.7 k ∥ 10 k ∥ 1.2 k) against 0.1 µF | low-pass 1825 Hz |
-| output coupling | 330 µF into 8 Ω | high-pass 60.3 Hz |
+The first version of this stage treated the LM386 as an ideal gain block and
+modelled the volume at full only. Texas Instruments' LM386 data sheet (SNAS545D,
+revised August 2023) supplies what that left out. It is TI's copyrighted
+document, so it is **not in the repository**; TI publishes it at
+[ti.com/lit/ds/symlink/lm386.pdf](https://www.ti.com/lit/ds/symlink/lm386.pdf).
+What was taken from it:
 
-Each is a bilinear section prewarped to its corner. The corners are fixed in
-hertz and rebuilt when the clock moves: the loudspeaker circuit did not change
-when the voice knob turned.
+| LM386 data sheet | Value | Used for |
+|---|---|---|
+| 6.5 Electrical Characteristics, R<sub>IN</sub> | 50 k | loads the wiper, in parallel with the 1.2 k |
+| 6.5, A<sub>V</sub>, pins 1 and 8 open; §9.2.1.2.1 | 20 (26 dB), from the internal 1.35 k | amplifier gain |
+| 6.5, BW, pins 1 and 8 open; Figure 6-4 | 300 kHz | checked: −0.02 dB at 20 kHz, so not modelled |
+| Figure 6-3, Output Voltage vs Supply Voltage | 6.6 V peak to peak, 12 V, 8 Ω | the clipping level, ±3.3 V |
+| Figure 6-6, THD vs Power Out | about 0.2%, then vertical | clipping is hard, so a hard limit |
+| 6.3 Recommended Operating Conditions | 4–12 V (LM386N-1) | Figure 8's 12 V is the top of the range |
 
-**Deliberately left out, and said so in `votrax.c`:**
+Figure 6-3 was read from a 200 dpi render of page 6. **Read off a graph, so
+approximate:** the 8 Ω curve at 12 V sits just above the 6 V grid line and has
+flattened. Figure 6-7 looks as if it disagrees, putting the 10% distortion point
+at 12 V near 0.36 W, which would be 4.8 V peak to peak into 8 Ω. But Figure 6-7
+does not state its load, and 0.36 W is 3.6 V peak to peak into 4 Ω — exactly
+Figure 6-3's 4 Ω curve at 12 V. So Figure 6-7 is read as a 4 Ω plot, and 6.6 V
+into 8 Ω is kept. **Inferred.**
 
-- the passband gain (0.186 × 20), so switching the stage changes tone, not level
-- the LM386's own limits
-- the speaker's response
-- the volume control at anything but full
+### Levels: the SC-01 sheet again
 
-**Inferred:** nothing beyond reading the parts. This is still one board's
-choice of parts, not the sound of every SC-01 product, which is why it is an
-option and `VX_OUTPUT_CHIP` stays the default.
+The clipping level only means something once chip units are volts. The SC-01
+sheet's audio-output section, and its table on page 8, give AO's swing on AH as
+0.18–0.26 × Vp peak to peak. Its middle, 0.22 × 12 V = 2.64 V, is set against AH
+on the 1980 mask at the neutral level, 1.383 chip units peak to peak, which
+gives **1.909 V per chip unit**. Both masks share the scale, because the mask
+changes the ROM and not the output circuit.
 
-**Checked** on "She sells sea shells by the sea shore." (SC-01 mask), rendered
-both ways and compared band by band:
+**Inferred:** that the range is centred on its middle. Measured, AH on the SC-01
+mask runs 1.31–1.55 units from level 0 to level 3, a spread of 18%. The sheet's
+range is 44% wide, more than pitch alone explains, so it probably also covers
+part-to-part variation.
 
-| Band | Figure 8 energy / chip energy | Test bound |
+### The model
+
+`vx_set_output(chip, VX_OUTPUT_FIGURE8)` and `vx_set_output_volume(chip, P)`,
+with P from 0 to 1 along the pot's track. The taper law is the conventional audio
+law used for the voice knob (§7):
+
+| Stage | From | Model |
+|---|---|---|
+| input coupling | 1 µF into R1 + Rt + (Rb ∥ 1.2 k ∥ 50 k) | high-pass, 27.7 Hz at full volume |
+| network | R1, C1, Rt, Rb ∥ 1.2 k ∥ 50 k, C2 | second order, below |
+| LM386 | gain 20, ±3.3 V | multiply, hard limit |
+| output coupling | 330 µF into 8 Ω | high-pass, 60.3 Hz |
+
+The network by nodal analysis at A and W, with G1 = 1/R1 and
+Gw = 1/Rb + 1/1.2 k + 1/50 k:
+
+```
+H(s) = G1 / ( G1 + Gw + Rt·G1·Gw  +  s·((1 + Rt·Gw)·C1 + (1 + Rt·G1)·C2)  +  s²·Rt·C1·C2 )
+```
+
+At full volume Rt = 0, C1 and C2 act as one 0.1 µF, and H is a single pole at
+**1855 Hz** with a gain of **0.1825**. It is made bilinear, prewarped at that
+corner. The corners are fixed in hertz and are rebuilt when the clock or the
+volume moves: the loudspeaker circuit did not change when the voice knob turned.
+
+The output is scaled back by 1.909 V per unit, the gain of 20 and the
+full-volume gain of 0.1825. An unclipped signal at full volume therefore keeps
+the chip's own level, and turning the volume down makes it quieter, as the pot
+did.
+
+**Deliberately not modelled:**
+
+- the LM386's 0.2% distortion below clipping
+- its 300 kHz bandwidth
+- the speaker's own response
+- the 0.1 µF from the LM386 output to ground
+- AO's source resistance (the sheet gives 90 Ω at most, beside 4.7 k)
+
+### The finding: Votrax's reference circuit clips
+
+At full volume, clipping at ±3.3 V out corresponds to ±0.474 chip units of
+low-frequency drive, 0.947 units peak to peak. AH on the 1980 mask is 1.37 units
+peak to peak, and on the SC-01A mask 0.82. Measured through the model on a
+sustained AH:
+
+| Volume | SC-01 AH, p-p | SC-01A AH, p-p | SC-01 / SC-01A |
+|---:|---:|---:|---:|
+| chip, no stage | 1.367 | 0.820 | 1.667 |
+| 1.00 | 0.987 | 0.758 | 1.302 |
+| 0.98 | | | 1.419 |
+| 0.96 | | | 1.533 |
+| 0.94 | | | 1.629 |
+| 0.92 | | | 1.667 |
+| 0.90 | 0.656 | 0.393 | 1.667 |
+| 0.80 | 0.462 | 0.277 | 1.667 |
+| 0.50 | 0.210 | 0.126 | 1.667 |
+
+Wherever the LM386 is linear, the ratio between the masks is the chip's own
+1.667. It falls only where the louder mask clips. So on the board Votrax
+published, the 1980 part's open vowels flatten against the amplifier from about
+0.93 of the volume track upward. The SC-01A, the chip Figure 8 actually draws,
+fits at full volume.
+
+That is consistent with the revision's quieter open vowels
+(`docs/tech-overview.md`, Part 1), but consistent is all it is. Nothing says
+that was the reason for the change.
+
+### Checked
+
+On "She sells sea shells by the sea shore." (SC-01 mask) and on sustained AH:
+
+| Measure | Result | Test bound |
 |---|---:|---|
-| 300–1000 Hz | 0.89 | 0.5–1.05 |
-| 6–12 kHz | 0.058 | below 0.1 |
-| 6–12 kHz at a 1.44 MHz clock | 0.049 | below 0.1 |
-| below 20 Hz, as a share of the Figure 8 total | 0.000016 | below 0.01 |
+| (6–12 kHz ÷ 300–1000 Hz), Figure 8 at volume 0.8, over the same for the chip | 0.0075 | below 0.1 |
+| the same at a 1.44 MHz clock | 0.0058 | below 0.1 |
+| the same at volume 1.0, where it clips | 0.26 | none — clipping makes harmonics |
+| below 20 Hz, as a share of the Figure 8 total | 0.000018 | below 0.01 |
+| SC-01A AH peak at full volume | 0.455 | below the 0.474 limit |
+| SC-01 AH peak at full volume | 0.495 | 0.95–1.15 × the limit |
+| SC-01 / SC-01A AH at volume 0.8 | 1.667 | the chip's ratio, ±3% |
+| volume 0 | silence | exactly zero |
 
-The third row shows the corners stay put while the voice moves. A cancel clears
-the stage's state.
-**Test:** `TestFigure8OutputStage`; `votrax-say --output-stage figure8`.
+A cancel clears the stage's state.
+
+**Test:** `TestFigure8OutputStage`; `votrax-say --output-stage figure8 --volume P`.
 
 ## 11. External timing
 

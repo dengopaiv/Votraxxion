@@ -140,10 +140,24 @@ def test_figure8_output_stage_changes_the_audio_not_the_length(tmp_path):
     assert chip.read_bytes() != fig8.read_bytes()
 
 
+def test_volume_turns_figure8_down(tmp_path):
+    loud, quiet = tmp_path / "loud.wav", tmp_path / "quiet.wav"
+    base = ["--output-stage", "figure8", "--mask", "sc01", "father"]
+    assert run("-o", str(loud), *base).returncode == 0
+    assert run("-o", str(quiet), "--volume", "0.5", *base).returncode == 0
+
+    def peak(path):
+        with wave.open(str(path)) as w:
+            data = memoryview(w.readframes(w.getnframes())).cast("h")
+            return max(abs(s) for s in data)
+
+    assert peak(quiet) < peak(loud) / 2
+
+
 @pytest.mark.parametrize("args", [
     ["--clock", "5"], ["--speed", "0"], ["--inflection", "4"],
     ["--mask", "sc02"], ["--bogus"], ["--knob", "1.5"], ["--rc", "6800"],
-    ["--rc", "5,5"], ["--output-stage", "radio"],
+    ["--rc", "5,5"], ["--output-stage", "radio"], ["--volume", "2"],
 ])
 def test_bad_options_fail_cleanly(args, tmp_path):
     r = run("-o", str(tmp_path / "x.wav"), *args, "text")

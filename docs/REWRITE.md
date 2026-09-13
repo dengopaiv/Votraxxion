@@ -361,5 +361,11 @@ API behaviours were brought into line with Votrax's 1980 data sheet
 
 New, and fingerprinted under `datasheet`: `vx_clock_from_rc`,
 `vx_clock_from_knob`, the mid-phone inflection change, and both output stages.
-Every other entry is byte-identical. `tools/verify_gui.py` still
+Every other entry is byte-identical.
+
+Later the same day the Figure 8 stage was rebuilt from TI's LM386 data sheet
+(`docs/DATASHEET.md`, §10): the 50 k input resistance, the gain of 20, a hard
+limit at the amplifier's swing, and a volume control that makes the network
+second order. Only `datasheet.output_1` moved, and `output_1_vol08` was added.
+The default output, `VX_OUTPUT_CHIP`, is untouched. `tools/verify_gui.py` still
 reports the GUI executable and the library agreeing on all 21 cases.

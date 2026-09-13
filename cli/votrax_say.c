@@ -43,6 +43,7 @@ typedef struct {
     int          flat;
     int          print_only;
     int          output_stage;
+    double       volume;
 } options;
 
 static void usage(FILE *to)
@@ -70,6 +71,8 @@ static void usage(FILE *to)
         "  --flat                no sentence contour on text\n"
         "  --output-stage S      chip (the AO pin, default) or figure8 (the\n"
         "                        data sheet's LM386 amplifier into a speaker)\n"
+        "  --volume P            figure8's volume control, 0-1 (default 1, full;\n"
+        "                        the 1980 mask's loudest vowels clip above ~0.93)\n"
         "\n"
         "output:\n"
         "  -o, --output FILE     WAV path (default votrax.wav)\n"
@@ -364,6 +367,7 @@ int main(int argc, char **argv)
     o.mask = VX_MASK_SC01A;
     o.clock_hz = VX_BASE_CLOCK;
     o.output_stage = VX_OUTPUT_CHIP;
+    o.volume = 1.0;
     o.speed = 1.0;
     o.inflection = VX_NEUTRAL_INFLECTION;
 
@@ -413,6 +417,11 @@ int main(int argc, char **argv)
             o.clock_hz = vx_clock_from_rc(ohms, farads);
             if (o.clock_hz < 100000 || o.clock_hz > 4000000)
                 return fail("--rc gives a clock outside 100000-4000000 Hz", next);
+            i++;
+        } else if (!strcmp(a, "--volume")) {
+            if (!next || !parse_double(next, 0, 1, &v))
+                return fail("--volume wants a position from 0 to 1", next);
+            o.volume = v;
             i++;
         } else if (!strcmp(a, "--output-stage")) {
             if (!next) return fail("missing value for", a);
@@ -495,6 +504,7 @@ int main(int argc, char **argv)
     vx_set_speed(chip, o.speed);
     vx_inflection(chip, (unsigned char)o.inflection);
     vx_set_output(chip, o.output_stage);
+    vx_set_output_volume(chip, o.volume);
 
     if (!(o.mode == MODE_TABLE ? table(chip, &b, o.speed)
                                : speak(chip, phones, count, &b)))

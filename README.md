@@ -223,8 +223,10 @@ Voice options: `--mask sc01a|sc01`, `--clock HZ` (100000–4000000), `--speed X`
 contour). From the 1980 data sheet: `--knob P` sets the clock from its voice
 knob circuit (6.8 kΩ + 50 kΩ audio taper, 120 pF; 0.6 is the standard voice),
 `--rc OHMS,FARADS` from its `f ≈ 1.25/RC` relation, and `--output-stage figure8`
-plays the result through its LM386 speaker amplifier (see
-[docs/DATASHEET.md](docs/DATASHEET.md)). `votrax-say --help` lists them all. Phone strings use the GUI's
+plays the result through its LM386 speaker amplifier, modelled from TI's LM386
+data sheet, with `--volume P` for the board's volume control (see
+[docs/DATASHEET.md](docs/DATASHEET.md)). At full volume that circuit clips the
+1980 mask's open vowels, as the real board would have. `votrax-say --help` lists them all. Phone strings use the GUI's
 grammar — `NAME[:LEVEL]`, separated by spaces or commas — and `--print` writes
 that grammar, so its output can be edited and fed back through `--phones`.
 `--table` prints each phone's start time and length, so the WAV can be cut up

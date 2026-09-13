@@ -106,15 +106,27 @@ VOTRAX_API unsigned int vx_clock_from_knob(double position);
  * VX_OUTPUT_CHIP is the AO pin as the chip drives it, which is what every
  * other part of this library renders and what the goldens fingerprint.
  * VX_OUTPUT_FIGURE8 passes it through the audio circuit of the data sheet's
- * Figure 8 -- coupling capacitor, RC network, LM386 and output capacitor into
- * an 8 ohm speaker -- modelled as a 27.6 Hz high-pass, a 1825 Hz low-pass and
- * a 60.3 Hz high-pass, at the chip's own level.  It is the sound of the one
- * board Votrax published, not of every product: the parts were the designer's
- * choice.  The derivation from the scan is in votrax.c. */
+ * Figure 8: the coupling capacitor, the RC network with its 10 k volume
+ * control, an LM386 as TI's data sheet specifies it (50 k input, gain 20, a
+ * hard limit at 6.6 V peak to peak into 8 ohms on 12 V), and the output
+ * capacitor into the speaker.  At full volume it is a 1855 Hz low-pass between
+ * high-passes near 28 and 60 Hz, at the chip's own level -- until the LM386
+ * runs out of swing, which on the 1980 mask's open vowels it does.  It is the
+ * sound of the one board Votrax published, not of every product: the parts
+ * were the designer's choice.  The derivation is in votrax.c and
+ * docs/DATASHEET.md. */
 #define VX_OUTPUT_CHIP    0
 #define VX_OUTPUT_FIGURE8 1
 VOTRAX_API void vx_set_output(vx_chip *chip, int stage);
 VOTRAX_API int vx_output(vx_chip *chip);
+
+/* Figure 8's volume control, 0-1 along its audio-taper track (the same law as
+ * the voice knob).  1, the default, is full; lower is quieter and, because the
+ * pot sits inside the RC network, also changes the tone a little.  Above about
+ * 0.93 the 1980 mask's loudest vowels clip the LM386.  Only affects
+ * VX_OUTPUT_FIGURE8. */
+VOTRAX_API void vx_set_output_volume(vx_chip *chip, double position);
+VOTRAX_API double vx_output_volume(vx_chip *chip);
 
 /* Output sample rate in Hz -- master clock / 18.  Changes with the clock, so
  * re-read it after vx_set_clock and re-open the audio device if it moved. */

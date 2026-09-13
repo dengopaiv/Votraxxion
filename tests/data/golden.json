@@ -25,11 +25,18 @@
   ],
   "output_0": [
    0,
+   1.0,
    "60efd2f1ff29acacbd975a75211fe50a"
   ],
   "output_1": [
    1,
-   "37fc9ef64f1b2e9604b664f55a09f636"
+   1.0,
+   "4950c7f4e0e46f930cc00b23eb4b2b3b"
+  ],
+  "output_1_vol08": [
+   1,
+   0.8,
+   "5738bc128097dda1be9ee9a40849f43a"
   ]
  },
  "inflection": [

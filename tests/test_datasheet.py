@@ -339,19 +339,43 @@ class TestMasterClock:
 
 # ------------------------------------------------------ Figure 8 output ---
 
+#: SC-01 data sheet Figure 8 and TI's LM386 data sheet (SNAS545D), as
+#: src/votrax.c uses them.
+R1, POT, R_WIPER, C_NODE = 4700.0, 10000.0, 1200.0, 0.05e-6
+LM386_R_IN, LM386_GAIN, LM386_SWING = 50000.0, 20.0, 3.3
+VOLTS_PER_UNIT = 0.22 * 12.0 / 1.383
+SHUNT = 1 / (1 / POT + 1 / R_WIPER + 1 / LM386_R_IN)
+FULL_GAIN = SHUNT / (R1 + SHUNT)
+#: Where the LM386 limits, in output units at full volume.
+CLIP = LM386_SWING / (VOLTS_PER_UNIT * LM386_GAIN * FULL_GAIN)
+
+
 class TestFigure8OutputStage:
-    def _speech(self, lib, stage, clock=0):
-        c = lib.vx_create(1, clock)
+    def _speech(self, lib, stage, clock=0, volume=1.0, mask=1,
+                text=b"She sells sea shells by the sea shore."):
+        c = lib.vx_create(mask, clock)
         lib.vx_set_output(c, stage)
+        lib.vx_set_output_volume(c, volume)
         buf = (ctypes.c_ubyte * 4096)()
-        n = lib.ttv_translate(b"She sells sea shells by the sea shore.", buf, 4096)
+        n = lib.ttv_translate(text, buf, 4096)
         lib.vx_speak(c, buf, n)
         out = []
         while lib.vx_pending(c):
             out.append(render(lib, c, 4096))
         rate = lib.vx_sample_rate(c)
         lib.vx_destroy(c)
-        return np.concatenate(out), rate
+        return np.concatenate(out) / 32767.0, rate
+
+    @staticmethod
+    def _ah(lib, mask, stage, volume=1.0):
+        c = lib.vx_create(mask, 0)
+        lib.vx_set_output(c, stage)
+        lib.vx_set_output_volume(c, volume)
+        lib.vx_write(c, 0x24)
+        render(lib, c, 4000)
+        x = render(lib, c, 5000) / 32767.0
+        lib.vx_destroy(c)
+        return x
 
     @staticmethod
     def band_energy(x, rate, lo, hi):
@@ -359,29 +383,75 @@ class TestFigure8OutputStage:
         freqs = np.fft.rfftfreq(len(x), 1.0 / rate)
         return spectrum[(freqs >= lo) & (freqs < hi)].sum()
 
-    def test_default_is_the_chip(self, lib, chip):
+    def shape(self, x, rate):
+        """High band over low band: a tone measure independent of level."""
+        return self.band_energy(x, rate, 6000, 12000) / self.band_energy(x, rate, 300, 1000)
+
+    def test_defaults_and_clamps(self, lib, chip):
         assert lib.vx_output(chip) == 0
+        assert lib.vx_output_volume(chip) == 1.0
         lib.vx_set_output(chip, 1)
         assert lib.vx_output(chip) == 1
         lib.vx_set_output(chip, 7)
         assert lib.vx_output(chip) == 0
+        lib.vx_set_output_volume(chip, 1.5)
+        assert lib.vx_output_volume(chip) == 1.0
+        lib.vx_set_output_volume(chip, -1)
+        assert lib.vx_output_volume(chip) == 0.0
 
     def test_corners_derived_from_the_parts(self):
-        """The numbers votrax.h documents, from the parts on page 10."""
-        hp_in = 1 / (2 * math.pi * 1e-6 * (4700 + 1 / (1 / 10000 + 1 / 1200)))
-        lp = 1 / (2 * math.pi * 0.1e-6 / (1 / 4700 + 1 / 10000 + 1 / 1200))
+        """Figure 8's parts with the LM386's 50 k input across the wiper."""
+        hp_in = 1 / (2 * math.pi * 1e-6 * (R1 + SHUNT))
+        lp = 1 / (2 * math.pi * 2 * C_NODE / (1 / R1 + 1 / SHUNT))
         hp_spk = 1 / (2 * math.pi * 330e-6 * 8)
-        assert hp_in == pytest.approx(27.6, abs=0.05)
-        assert lp == pytest.approx(1825, abs=1)
+        assert hp_in == pytest.approx(27.7, abs=0.05)
+        assert lp == pytest.approx(1855, abs=1)
         assert hp_spk == pytest.approx(60.3, abs=0.05)
+        assert FULL_GAIN == pytest.approx(0.1825, abs=0.0001)
+
+    def test_lm386_figures(self):
+        """SNAS545D: gain 20 is the 26 dB of 6.5 and Figure 6-4; 6.6 V peak to
+        peak into 8 ohms at 12 V is Figure 6-3; the AO scale is the SC-01
+        sheet's 0.22 x Vp on AH over our 1.383 units."""
+        assert 20 * math.log10(LM386_GAIN) == pytest.approx(26, abs=0.05)
+        assert VOLTS_PER_UNIT == pytest.approx(1.909, abs=0.001)
+        assert CLIP == pytest.approx(0.4734, abs=0.0005)
 
     def test_it_is_a_low_pass_around_two_kilohertz(self, lib):
+        """Measured where the LM386 is linear (volume 0.8), as tone."""
         chip_out, rate = self._speech(lib, 0)
-        fig8, _ = self._speech(lib, 1)
-        mid = self.band_energy(fig8, rate, 300, 1000) / self.band_energy(chip_out, rate, 300, 1000)
-        high = self.band_energy(fig8, rate, 6000, 12000) / self.band_energy(chip_out, rate, 6000, 12000)
-        assert 0.5 < mid <= 1.05
-        assert high < 0.1
+        fig8, _ = self._speech(lib, 1, volume=0.8)
+        assert self.shape(fig8, rate) / self.shape(chip_out, rate) < 0.1
+
+    def test_full_volume_keeps_the_chip_level_below_clipping(self, lib):
+        """AH on the later mask stays inside the LM386's swing at full volume,
+        and there the stage keeps the chip's own level: the network's gain,
+        the amplifier's 20 and the volts per unit are all scaled back out."""
+        chip_ah = self._ah(lib, 0, 0)
+        fig8_ah = self._ah(lib, 0, 1)
+        assert np.abs(fig8_ah).max() < CLIP
+        assert np.ptp(fig8_ah) / np.ptp(chip_ah) == pytest.approx(0.91, abs=0.1)
+
+    def test_the_1980_masks_open_vowels_clip_at_full_volume(self, lib):
+        """The finding: Votrax's reference circuit, at full volume, drives the
+        LM386 past its swing on AH from the SC-01 mask, but not from the
+        SC-01A. Peak-to-peak between the masks is 1.67 on the chip; the
+        clipped stage squeezes it, and at volume 0.8 it is linear again."""
+        chip_ratio = np.ptp(self._ah(lib, 1, 0)) / np.ptp(self._ah(lib, 0, 0))
+        full = np.ptp(self._ah(lib, 1, 1)) / np.ptp(self._ah(lib, 0, 1))
+        quiet = (np.ptp(self._ah(lib, 1, 1, 0.8)) /
+                 np.ptp(self._ah(lib, 0, 1, 0.8)))
+        assert chip_ratio == pytest.approx(1.67, abs=0.03)
+        assert full < 1.4
+        assert quiet == pytest.approx(chip_ratio, rel=0.03)
+        loud = self._ah(lib, 1, 1)
+        # A clipped top, lifted a little by the speaker coupling after it.
+        assert CLIP * 0.95 < loud.max() < CLIP * 1.15
+
+    def test_volume_is_monotonic_and_zero_is_silent(self, lib):
+        levels = [np.ptp(self._ah(lib, 0, 1, v)) for v in (0.2, 0.5, 0.8, 1.0)]
+        assert levels == sorted(levels)
+        assert np.abs(self._ah(lib, 0, 1, 0.0)).max() == 0.0
 
     def test_the_speaker_coupling_removes_the_bias(self, lib):
         fig8, rate = self._speech(lib, 1)
@@ -392,10 +462,8 @@ class TestFigure8OutputStage:
     def test_the_corners_do_not_move_with_the_clock(self, lib):
         """The loudspeaker circuit is fixed in hertz; the voice is not."""
         chip_hi, rate_hi = self._speech(lib, 0, 1440000)
-        fig8_hi, _ = self._speech(lib, 1, 1440000)
-        high = (self.band_energy(fig8_hi, rate_hi, 6000, 12000) /
-                self.band_energy(chip_hi, rate_hi, 6000, 12000))
-        assert high < 0.1
+        fig8_hi, _ = self._speech(lib, 1, 1440000, volume=0.8)
+        assert self.shape(fig8_hi, rate_hi) / self.shape(chip_hi, rate_hi) < 0.1
 
     def test_cancel_clears_it(self, lib, chip):
         lib.vx_set_output(chip, 1)
