@@ -46,9 +46,9 @@ actually check is the only thing that distinguishes it from any other unsigned
 executable. Missing inputs are a hard error rather than a quiet gap: a zip with
 the x86 build silently absent is worse than no zip.
 
-The version appears in three places that move together —
-`nvda-addon/manifest.ini`, the `VERSIONINFO` block in `gui-native/votrax_native.rc`
-and `VERSION` in `packaging/make_native_release.py`.
+The version appears in four places that move together —
+`nvda-addon/manifest.ini`, the `VERSIONINFO` block in `gui-native/votrax_native.rc`,
+`VERSION` in `packaging/make_native_release.py` and `project()` in `CMakeLists.txt`.
 
 `packaging/make_release.py` is a different thing: it packages the wxPython
 Workbench, which is a ~150 MB PyInstaller bundle. Two artifacts, two audiences,

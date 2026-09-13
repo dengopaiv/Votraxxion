@@ -8,7 +8,7 @@
 # (nvda-addon/package.py, gui-native/build.cmd), because both are Windows-only
 # and one of them has to produce two architectures from one run.
 cmake_minimum_required(VERSION 3.16)
-project(votrax_native VERSION 1.1.0 LANGUAGES C)
+project(votrax_native VERSION 1.2.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)

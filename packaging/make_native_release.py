@@ -29,9 +29,9 @@ import time
 import zipfile
 from pathlib import Path
 
-# Matches nvda-addon/manifest.ini and the VERSIONINFO in
-# gui-native/votrax_native.rc. All three move together.
-VERSION = "1.1.0"
+# Matches nvda-addon/manifest.ini, the VERSIONINFO in gui-native/votrax_native.rc
+# and project() in CMakeLists.txt. All four move together.
+VERSION = "1.2.0"
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
@@ -60,11 +60,12 @@ An emulation of the Votrax SC-01, the 1980 phoneme chip behind the Type 'N
 Talk, the Apple II Mockingboard's speech and a generation of arcade machines.
 The speech is not imitated: the DSP is built from the schematics extracted
 from die photographs and tracks MAME's silicon-level simulation of the
-decapped part. Both production mask ROMs are included as voices.
+decapped part. Both production mask revisions are voices.
 
-Nothing here needs Python, a runtime, or a data file. Both mask ROMs and the
-whole English letter-to-sound front end are compiled into the C, which is why
-the whole release is under a megabyte.
+Nothing here needs Python, a runtime, or a data file. The phoneme tables of
+both masks and the whole English letter-to-sound front end are compiled into
+the C -- there is no ROM file anywhere in it -- which is why the whole release
+is under a megabyte.
 
 What is in it
 -------------
